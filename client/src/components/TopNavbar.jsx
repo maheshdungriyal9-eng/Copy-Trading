@@ -33,10 +33,6 @@ const TopNavbar = () => {
             </div>
 
             <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400">
-                    <WalletIcon size={16} />
-                    <span className="text-sm font-bold">Credit ₹150.00</span>
-                </div>
 
                 <button className="p-2 text-slate-400 hover:text-slate-100 bg-slate-800/50 rounded-full relative transition-colors">
                     <Bell size={20} />
@@ -52,7 +48,6 @@ const TopNavbar = () => {
                             <p className="text-sm font-semibold text-slate-100 leading-none">
                                 {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Loading...'}
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">Free Plan</p>
                         </div>
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/20 ring-2 ring-indigo-500/20">
                             {getInitials(user)}

@@ -346,16 +346,6 @@ const DematPage = () => {
                         </button>
                     </div>
 
-                    {/* How to Connect */}
-                    <a
-                        href="#"
-                        className="flex items-center gap-2 text-slate-100 hover:text-white transition-colors text-sm font-bold border-b-2 border-slate-700 pb-0.5"
-                    >
-                        How To Connect
-                        <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center">
-                            <Youtube size={14} fill="white" className="text-red-600" />
-                        </div>
-                    </a>
 
                     {/* Relogin All */}
                     <button className="flex items-center gap-2 px-4 py-2 bg-[#00c853] hover:bg-[#00b24a] text-white font-bold rounded-lg transition-all shadow-lg shadow-emerald-500/10 active:scale-95 text-xs">
