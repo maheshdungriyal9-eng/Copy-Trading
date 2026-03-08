@@ -15,6 +15,10 @@ const WatchlistPage = () => {
     const [searching, setSearching] = useState(false);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
     const [orderModalSide, setOrderModalSide] = useState('BUY');
+    const [accounts, setAccounts] = useState([]);
+    const [groups, setGroups] = useState([]);
+    const [activeDropdown, setActiveDropdown] = useState(null); // { scriptId, side }
+    const [selectedRouting, setSelectedRouting] = useState({ accountId: null, groupId: null });
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -41,7 +45,25 @@ const WatchlistPage = () => {
     useEffect(() => {
         fetchWatchlist();
         setupSocket();
+        fetchRoutingData();
+
+        const handleClickOutside = () => setActiveDropdown(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
     }, []);
+
+    const fetchRoutingData = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const [accRes, grpRes] = await Promise.all([
+            supabase.from('demat_accounts').select('id, nickname, broker_name').eq('user_id', user.id),
+            supabase.from('trading_groups').select('id, name').eq('user_id', user.id)
+        ]);
+
+        if (accRes.data) setAccounts(accRes.data);
+        if (grpRes.data) setGroups(grpRes.data);
+    };
 
     const setupSocket = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -287,25 +309,23 @@ const WatchlistPage = () => {
 
                             return (
                                 <tr key={script.id} className="hover:bg-indigo-500/[0.03] transition-all group border-l-2 border-transparent hover:border-indigo-500">
-                                    <td className="px-6 py-3">
+                                    <td className="px-6 py-3 relative">
                                         <div className="flex items-center justify-center gap-1.5">
                                             <button
-                                                onClick={() => {
-                                                    setSelectedScript(script);
-                                                    setOrderModalSide('BUY');
-                                                    setIsOrderModalOpen(true);
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveDropdown(activeDropdown?.scriptId === script.id && activeDropdown?.side === 'BUY' ? null : { scriptId: script.id, side: 'BUY' });
                                                 }}
-                                                className="w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform"
+                                                className={`w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform ${activeDropdown?.scriptId === script.id && activeDropdown?.side === 'BUY' ? 'ring-2 ring-white' : ''}`}
                                             >
                                                 B
                                             </button>
                                             <button
-                                                onClick={() => {
-                                                    setSelectedScript(script);
-                                                    setOrderModalSide('SELL');
-                                                    setIsOrderModalOpen(true);
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveDropdown(activeDropdown?.scriptId === script.id && activeDropdown?.side === 'SELL' ? null : { scriptId: script.id, side: 'SELL' });
                                                 }}
-                                                className="w-7 h-7 flex items-center justify-center bg-rose-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-rose-500/20 hover:scale-110 transition-transform"
+                                                className={`w-7 h-7 flex items-center justify-center bg-rose-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-rose-500/20 hover:scale-110 transition-transform ${activeDropdown?.scriptId === script.id && activeDropdown?.side === 'SELL' ? 'ring-2 ring-white' : ''}`}
                                             >
                                                 S
                                             </button>
@@ -315,6 +335,65 @@ const WatchlistPage = () => {
                                             >
                                                 <Trash2 size={12} />
                                             </button>
+
+                                            {activeDropdown?.scriptId === script.id && (
+                                                <div
+                                                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <div className="p-3 border-b border-slate-800 bg-slate-800/50">
+                                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Route {activeDropdown.side} Order</p>
+                                                    </div>
+
+                                                    <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                                                        <div className="px-3 py-2 bg-slate-950/50">
+                                                            <p className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">Individual Accounts</p>
+                                                        </div>
+                                                        {accounts.map(acc => (
+                                                            <button
+                                                                key={acc.id}
+                                                                onClick={() => {
+                                                                    setSelectedScript(script);
+                                                                    setOrderModalSide(activeDropdown.side);
+                                                                    setSelectedRouting({ accountId: acc.id, groupId: null });
+                                                                    setIsOrderModalOpen(true);
+                                                                    setActiveDropdown(null);
+                                                                }}
+                                                                className="w-full px-4 py-2.5 text-left hover:bg-indigo-600/10 transition-all flex items-center justify-between group"
+                                                            >
+                                                                <span className="text-[11px] font-bold text-slate-200 group-hover:text-white">{acc.nickname}</span>
+                                                                <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{acc.broker_name}</span>
+                                                            </button>
+                                                        ))}
+
+                                                        <div className="px-3 py-2 bg-slate-950/50 mt-1">
+                                                            <p className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter">Trading Groups</p>
+                                                        </div>
+                                                        {groups.map(grp => (
+                                                            <button
+                                                                key={grp.id}
+                                                                onClick={() => {
+                                                                    setSelectedScript(script);
+                                                                    setOrderModalSide(activeDropdown.side);
+                                                                    setSelectedRouting({ accountId: null, groupId: grp.id });
+                                                                    setIsOrderModalOpen(true);
+                                                                    setActiveDropdown(null);
+                                                                }}
+                                                                className="w-full px-4 py-2.5 text-left hover:bg-emerald-600/10 transition-all flex items-center justify-between group"
+                                                            >
+                                                                <span className="text-[11px] font-bold text-slate-200 group-hover:text-white">{grp.name}</span>
+                                                                <Zap size={10} className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                            </button>
+                                                        ))}
+
+                                                        {accounts.length === 0 && groups.length === 0 && (
+                                                            <div className="p-4 text-center">
+                                                                <p className="text-[10px] text-slate-600 font-bold italic">No targets defined</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-3 cursor-pointer" onClick={() => fetchFullQuote(script)}>
@@ -580,10 +659,15 @@ const WatchlistPage = () => {
 
             <OrderModal
                 isOpen={isOrderModalOpen}
-                onClose={() => setIsOrderModalOpen(false)}
+                onClose={() => {
+                    setIsOrderModalOpen(false);
+                    setSelectedRouting({ accountId: null, groupId: null });
+                }}
                 script={selectedScript}
                 ltp={prices[selectedScript?.symbol_token]?.ltp}
                 initialSide={orderModalSide}
+                accountId={selectedRouting.accountId}
+                groupId={selectedRouting.groupId}
             />
         </div>
     );

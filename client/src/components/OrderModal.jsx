@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Info, Zap, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const OrderModal = ({ isOpen, onClose, script, ltp }) => {
+const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
     const [orderType, setOrderType] = useState('MARKET'); // MARKET, LIMIT
     const [variety, setVariety] = useState('NORMAL'); // NORMAL, GTT
     const [transactionType, setTransactionType] = useState('BUY');
@@ -34,6 +34,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp }) => {
             let payload = {
                 user_id: user.id,
                 variety: variety,
+                account_id: accountId,
                 params: {
                     tradingsymbol: script.symbol,
                     symboltoken: script.symbol_token,
@@ -47,7 +48,21 @@ const OrderModal = ({ isOpen, onClose, script, ltp }) => {
                 }
             };
 
-            if (variety === 'GTT') {
+            if (groupId) {
+                endpoint = `${API_BASE_URL}/api/orders/execute-group`;
+                payload = {
+                    groupId: groupId,
+                    symbol: script.symbol,
+                    tradingsymbol: script.symbol,
+                    symboltoken: script.symbol_token,
+                    exchange: script.exchange,
+                    transactionType: transactionType,
+                    orderType: orderType,
+                    productType: productType === 'INTRADAY' ? 'INTRADAY' : (productType === 'DELIVERY' ? 'DELIVERY' : 'CARRYFORWARD'),
+                    quantity: quantity,
+                    price: orderType === 'MARKET' ? 0 : price
+                };
+            } else if (variety === 'GTT') {
                 endpoint = `${API_BASE_URL}/api/gtt/create`;
                 payload = {
                     user_id: user.id,
@@ -72,14 +87,15 @@ const OrderModal = ({ isOpen, onClose, script, ltp }) => {
             });
 
             const result = await response.json();
-            if (result.status) {
-                setMessage({ type: 'success', text: `Order Placed Successfully! ID: ${result.data.orderid || result.data.id}` });
+            if (result.status || result.success_count !== undefined) {
+                const id = result.data?.orderid || result.data?.id || (result.orderIds ? result.orderIds.join(', ') : 'OK');
+                setMessage({ type: 'success', text: `Execution Successful! ${groupId ? `Group: ${result.success_count}/${result.total_accounts}` : `ID: ${id}`}` });
                 setTimeout(() => {
                     onClose();
                     setMessage(null);
                 }, 2000);
             } else {
-                setMessage({ type: 'error', text: result.message || 'Execution Failed' });
+                setMessage({ type: 'error', text: result.message || result.error || 'Execution Failed' });
             }
         } catch (error) {
             setMessage({ type: 'error', text: error.message });

@@ -149,16 +149,22 @@ io.on('connection', (socket) => {
 
 app.post('/api/orders/execute', async (req, res) => {
     try {
-        const { user_id, params, variety = 'NORMAL' } = req.body;
+        const { user_id, params, variety = 'NORMAL', account_id } = req.body;
         if (!user_id || !params) return res.status(400).json({ success: false, message: 'Missing parameters' });
 
         // Get demat account
-        const { data: accounts } = await supabase
+        let query = supabase
             .from('demat_accounts')
             .select('*')
-            .eq('user_id', user_id)
-            .eq('broker_name', 'angelone')
-            .limit(1);
+            .eq('user_id', user_id);
+
+        if (account_id) {
+            query = query.eq('id', account_id);
+        } else {
+            query = query.eq('broker_name', 'angelone').limit(1);
+        }
+
+        const { data: accounts } = await query;
 
         if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
         const account = accounts[0];
