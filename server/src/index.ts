@@ -20,6 +20,7 @@ app.use(express.json());
 import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
+import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule } from './utils/brokers/angelone_orders';
 import { loginAngelOne } from './utils/brokers/angelone';
 import { supabase } from './utils/supabase';
 
@@ -142,6 +143,154 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
     });
+});
+
+// --- Order & GTT Endpoints ---
+
+app.post('/api/orders/execute', async (req, res) => {
+    try {
+        const { user_id, params, variety = 'NORMAL' } = req.body;
+        if (!user_id || !params) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        // Get demat account
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        // Ensure session
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await placeOrder(session.access_token, account.api_key, { ...params, variety });
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.post('/api/gtt/create', async (req, res) => {
+    try {
+        const { user_id, params } = req.body;
+        if (!user_id || !params) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await createGTTRule(session.access_token, account.api_key, params);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.get('/api/orders/book', async (req, res) => {
+    try {
+        const { user_id } = req.query;
+        if (!user_id) return res.status(400).json({ success: false, message: 'Missing user_id' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id as string)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await getOrderBook(session.access_token, account.api_key);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.get('/api/gtt/list', async (req, res) => {
+    try {
+        const { user_id } = req.query;
+        if (!user_id) return res.status(400).json({ success: false, message: 'Missing user_id' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id as string)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await getGTTRuleList(session.access_token, account.api_key);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.post('/api/orders/cancel', async (req, res) => {
+    try {
+        const { user_id, orderid, variety = 'NORMAL' } = req.body;
+        if (!user_id || !orderid) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        const account = accounts?.[0];
+        if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        const result = await cancelOrder(session.access_token, account.api_key, orderid, variety);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.post('/api/gtt/cancel', async (req, res) => {
+    try {
+        const { user_id, id, symboltoken, exchange } = req.body;
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        const account = accounts?.[0];
+        if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        const result = await cancelGTTRule(session.access_token, account.api_key, id, symboltoken, exchange);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
 });
 
 const PORT = process.env.PORT || 5000;

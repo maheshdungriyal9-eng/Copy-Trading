@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Zap, Globe, ShieldCheck, MoreVertical, Search, Star, ArrowUpRight, ArrowDownRight, RefreshCcw, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { socket } from '../socket';
+import OrderModal from '../components/OrderModal';
 
 const WatchlistPage = () => {
     const [scripts, setScripts] = useState([]);
@@ -12,6 +13,8 @@ const WatchlistPage = () => {
 
     const [filteredInstruments, setFilteredInstruments] = useState([]);
     const [searching, setSearching] = useState(false);
+    const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+    const [orderModalSide, setOrderModalSide] = useState('BUY');
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -286,8 +289,26 @@ const WatchlistPage = () => {
                                 <tr key={script.id} className="hover:bg-indigo-500/[0.03] transition-all group border-l-2 border-transparent hover:border-indigo-500">
                                     <td className="px-6 py-3">
                                         <div className="flex items-center justify-center gap-1.5">
-                                            <button className="w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform">B</button>
-                                            <button className="w-7 h-7 flex items-center justify-center bg-rose-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-rose-500/20 hover:scale-110 transition-transform">S</button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedScript(script);
+                                                    setOrderModalSide('BUY');
+                                                    setIsOrderModalOpen(true);
+                                                }}
+                                                className="w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform"
+                                            >
+                                                B
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedScript(script);
+                                                    setOrderModalSide('SELL');
+                                                    setIsOrderModalOpen(true);
+                                                }}
+                                                className="w-7 h-7 flex items-center justify-center bg-rose-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-rose-500/20 hover:scale-110 transition-transform"
+                                            >
+                                                S
+                                            </button>
                                             <button
                                                 onClick={() => handleDeleteScript(script.id)}
                                                 className="w-7 h-7 flex items-center justify-center bg-slate-800 text-slate-500 hover:text-rose-400 rounded transition-colors"
@@ -465,8 +486,24 @@ const WatchlistPage = () => {
                                             </div>
                                         </div>
                                         <div className="flex gap-3">
-                                            <button className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 active:scale-95">Place Buy Order</button>
-                                            <button className="px-8 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-rose-600/20 active:scale-95">Place Sell Order</button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsOrderModalOpen(true);
+                                                    setOrderModalSide('BUY');
+                                                }}
+                                                className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+                                            >
+                                                Place Buy Order
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsOrderModalOpen(true);
+                                                    setOrderModalSide('SELL');
+                                                }}
+                                                className="px-8 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-rose-500/20 active:scale-95"
+                                            >
+                                                Place Sell Order
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -540,6 +577,14 @@ const WatchlistPage = () => {
                     </div>
                 </div>
             )}
+
+            <OrderModal
+                isOpen={isOrderModalOpen}
+                onClose={() => setIsOrderModalOpen(false)}
+                script={selectedScript}
+                ltp={prices[selectedScript?.symbol_token]?.ltp}
+                initialSide={orderModalSide}
+            />
         </div>
     );
 };

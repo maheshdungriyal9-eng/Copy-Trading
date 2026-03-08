@@ -10,6 +10,7 @@ import OrderManagerPage from './pages/OrderManagerPage'
 import PendingOrdersPage from './pages/PendingOrdersPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import WalletPage from './pages/WalletPage'
+import OrdersPage from './pages/OrdersPage'
 import ProfilePage from './pages/ProfilePage'
 import ActivityLogsPage from './pages/ActivityLogsPage'
 import AuthPage from './pages/AuthPage'
@@ -67,8 +68,7 @@ function App() {
                                         <Route path="/demat" element={<DematPage />} />
                                         <Route path="/watchlist" element={<WatchlistPage />} />
                                         <Route path="/group" element={<GroupPage />} />
-                                        <Route path="/order-manager" element={<OrderManagerPage />} />
-                                        <Route path="/pending-orders" element={<PendingOrdersPage />} />
+                                        <Route path="/orders" element={<OrdersPage />} />
                                         <Route path="/order-history" element={<OrderHistoryPage />} />
                                         <Route path="/wallet" element={<WalletPage />} />
                                         <Route path="/activity-logs" element={<ActivityLogsPage />} />
