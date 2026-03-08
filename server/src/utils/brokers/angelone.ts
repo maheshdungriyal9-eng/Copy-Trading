@@ -2,7 +2,7 @@
 import { SmartAPI } from "smartapi-javascript";
 import * as speakeasy from "speakeasy";
 
-export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey: string, pin: string) => {
+export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey: string, pin: string, requireProfile: boolean = false) => {
     try {
         const smart_api = new SmartAPI({
             api_key: apiKey,
@@ -30,6 +30,11 @@ export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey
                 const profile = await smart_api.getProfile();
                 console.log('[Demat] Profile fetched for verification:', JSON.stringify(profile));
 
+                // If profile data is completely missing and we require it, throw
+                if (requireProfile && (!profile || !profile.data)) {
+                    throw new Error('Failed to fetch profile data from Angel One.');
+                }
+
                 return {
                     success: true,
                     access_token: sessionData.jwtToken,
@@ -37,9 +42,13 @@ export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey
                     feed_token: sessionData.feedToken,
                     profile: profile.data
                 };
-            } catch (profileErr) {
-                console.warn('[Demat] Login succeeded but profile fetch failed:', profileErr);
-                // We still return success because the credentials themselves (ID/PIN/TOTP) are valid
+            } catch (profileErr: any) {
+                console.warn('[Demat] Profile fetch failed:', profileErr.message || profileErr);
+
+                if (requireProfile) {
+                    throw new Error(`Profile verification failed: ${profileErr.message || 'API Error'}. Please check your API Key and credentials.`);
+                }
+
                 return {
                     success: true,
                     access_token: sessionData.jwtToken,

@@ -33,40 +33,38 @@ app.post('/api/demat/validate', async (req, res) => {
         const { client_id, totp_secret, api_key, password, mobile, email } = req.body;
         console.log(`[Demat] Validating credentials and profile for: ${client_id}`);
 
-        const result = await loginAngelOne(client_id, totp_secret, api_key, password);
+        const result = await loginAngelOne(client_id, totp_secret, api_key, password, true); // Strict Mode
 
         if (result.success && result.profile) {
-            // Validate Mobile (Angel One usually returns it under mobileno)
             const profileMobile = result.profile.mobileno || '';
             const profileEmail = result.profile.email || '';
 
             console.log(`[Demat] Cross-verifying: Input Mobile(${mobile}) vs Profile(${profileMobile}), Input Email(${email}) vs Profile(${profileEmail})`);
 
-            // Check if mobile matches (last 10 digits to be safe)
             const sanitizedInputMobile = mobile.replace(/\D/g, '').slice(-10);
             const sanitizedProfileMobile = profileMobile.replace(/\D/g, '').slice(-10);
 
             if (sanitizedInputMobile !== sanitizedProfileMobile && sanitizedProfileMobile !== '') {
+                console.warn(`[Demat] Mobile mismatch for ${client_id}`);
                 return res.status(401).json({
                     success: false,
-                    message: `Mobile number mismatch. Registered mobile ends with ...${sanitizedProfileMobile.slice(-4)}`
+                    message: `Mobile number mismatch. Registered mobile ends with ...${sanitizedProfileMobile.slice(-4)}. Please use the exact mobile number registered with this Angel ID.`
                 });
             }
 
-            // Check if email matches (case-insensitive)
             if (email.toLowerCase().trim() !== profileEmail.toLowerCase().trim() && profileEmail !== '') {
+                console.warn(`[Demat] Email mismatch for ${client_id}`);
                 return res.status(401).json({
                     success: false,
-                    message: `Email mismatch. Registered email is ${profileEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}`
+                    message: `Email mismatch. Registered email is ${profileEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}. Please use the exact email registered with this Angel ID.`
                 });
             }
 
             res.json({ success: true, message: 'Credentials and Profile verified successfully' });
-        } else if (result.success) {
-            // Login passed but profile fetch failed (rare)
-            res.json({ success: true, message: 'Credentials verified (Profile check skipped)' });
         } else {
-            res.status(401).json({ success: false, message: 'Invalid credentials' });
+            // This part should technically be unreachable if requireProfile=true throws on failure,
+            // but we keep it for safety.
+            res.status(401).json({ success: false, message: 'Profile verification failed. Please check your API Key and credentials.' });
         }
     } catch (error: any) {
         console.error('[Demat] Validation error:', error.message || error);
