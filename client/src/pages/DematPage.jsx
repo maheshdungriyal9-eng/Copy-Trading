@@ -172,12 +172,14 @@ const DematPage = () => {
     const [showPin, setShowPin] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('grid');
+    const [isValidating, setIsValidating] = useState(false);
     const [formData, setFormData] = useState({
         broker_name: 'angelone',
         nickname: '',
         client_id: '',
         api_key: '',
         totp_secret: '',
+        password: '',
         mobile: '',
         email: '',
     });
@@ -216,30 +218,58 @@ const DematPage = () => {
             return;
         }
 
-        const { data, error } = await supabase
-            .from('demat_accounts')
-            .insert([{
-                ...formData,
-                user_id: user.id,
-                status: 'Active',
-                expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-            }])
-            .select();
-
-        if (error) {
-            alert('Error adding account: ' + error.message);
-        } else {
-            setShowModal(false);
-            fetchAccounts();
-            setFormData({
-                broker_name: 'angelone',
-                nickname: '',
-                client_id: '',
-                api_key: '',
-                totp_secret: '',
-                mobile: '',
-                email: '',
+        setIsValidating(true);
+        try {
+            const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+            const validateRes = await fetch(`${API_BASE_URL}/api/demat/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_id: formData.client_id,
+                    totp_secret: formData.totp_secret,
+                    api_key: formData.api_key,
+                    password: formData.password
+                })
             });
+
+            const validation = await validateRes.json();
+            if (!validation.success) {
+                alert(`Validation Failed: ${validation.message}`);
+                setIsValidating(false);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from('demat_accounts')
+                .insert([{
+                    ...formData,
+                    user_id: user.id,
+                    status: 'Active',
+                    expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                }])
+                .select();
+
+            if (error) {
+                alert('Error adding account: ' + error.message);
+            } else {
+                setShowModal(false);
+                fetchAccounts();
+                setFormData({
+                    broker_name: 'angelone',
+                    nickname: '',
+                    client_id: '',
+                    api_key: '',
+                    totp_secret: '',
+                    password: '',
+                    mobile: '',
+                    email: '',
+                });
+            }
+        } catch (err) {
+            console.error('Error during validation:', err);
+            alert('Error validating credentials. Please try again.');
+        } finally {
+            setIsValidating(false);
         }
     };
 
@@ -475,9 +505,11 @@ const DematPage = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-lg transition-all text-sm"
+                                    disabled={isValidating}
+                                    className={`px-8 py-2 ${isValidating ? 'bg-slate-700 cursor-not-allowed' : 'bg-sky-500 hover:bg-sky-600'} text-white font-bold rounded-lg transition-all text-sm flex items-center gap-2`}
                                 >
-                                    Add
+                                    {isValidating && <RefreshCw size={14} className="animate-spin" />}
+                                    {isValidating ? 'Validating...' : 'Add'}
                                 </button>
                             </div>
                         </form>

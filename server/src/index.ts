@@ -20,11 +20,30 @@ app.use(express.json());
 import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
+import { loginAngelOne } from './utils/brokers/angelone';
 
 const marketDataHandler = new AngelOneMarketData(io);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
+});
+
+app.post('/api/demat/validate', async (req, res) => {
+    try {
+        const { client_id, totp_secret, api_key, password } = req.body;
+        console.log(`[Demat] Validating credentials for: ${client_id}`);
+
+        const result = await loginAngelOne(client_id, totp_secret, api_key, password);
+
+        if (result.success) {
+            res.json({ success: true, message: 'Credentials verified successfully' });
+        } else {
+            res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+    } catch (error: any) {
+        console.error('[Demat] Validation error:', error.message || error);
+        res.status(401).json({ success: false, message: error.message || 'Login failed' });
+    }
 });
 
 app.post('/api/orders/execute-group', async (req, res) => {
