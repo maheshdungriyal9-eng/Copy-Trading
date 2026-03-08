@@ -148,6 +148,33 @@ const GroupPage = () => {
         ));
     };
 
+    const handleDeleteGroup = async (groupId) => {
+        if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+
+        try {
+            // 1. Delete mappings first due to foreign key constraints if any (though usually Cascade is better)
+            const { error: mappingError } = await supabase
+                .from('group_accounts')
+                .delete()
+                .eq('group_id', groupId);
+
+            if (mappingError) throw mappingError;
+
+            // 2. Delete the group
+            const { error: groupError } = await supabase
+                .from('groups')
+                .delete()
+                .eq('id', groupId);
+
+            if (groupError) throw groupError;
+
+            fetchData();
+        } catch (error) {
+            console.error('Error deleting group:', error);
+            alert('Failed to delete group. Please try again.');
+        }
+    };
+
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -169,14 +196,23 @@ const GroupPage = () => {
                     <div className="col-span-full py-20 text-center text-slate-500 italic uppercase font-black tracking-widest animate-pulse">Loading Groups...</div>
                 ) : groups.map((group) => (
                     <div key={group.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-all duration-300 group overflow-hidden relative shadow-xl">
-                        <div className="flex items-center gap-4 mb-2">
-                            <div className="bg-indigo-600/10 p-3 rounded-2xl text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
-                                <Users size={28} />
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-indigo-600/10 p-3 rounded-2xl text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+                                    <Users size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">{group.group_name}</h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Multi-Account Cluster</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-white">{group.group_name}</h3>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Multi-Account Cluster</p>
-                            </div>
+                            <button
+                                onClick={() => handleDeleteGroup(group.id)}
+                                className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                                title="Delete Group"
+                            >
+                                <Trash2 size={20} />
+                            </button>
                         </div>
 
                         <div className="mb-6">
