@@ -20,7 +20,7 @@ app.use(express.json());
 import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
-import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule } from './utils/brokers/angelone_orders';
+import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData } from './utils/brokers/angelone_orders';
 import { loginAngelOne } from './utils/brokers/angelone';
 import { supabase } from './utils/supabase';
 
@@ -248,6 +248,81 @@ app.get('/api/orders/book', async (req, res) => {
         if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
 
         const result = await getOrderBook(session.access_token, account.api_key);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.get('/api/orders/tradebook', async (req, res) => {
+    try {
+        const { user_id } = req.query;
+        if (!user_id) return res.status(400).json({ success: false, message: 'Missing user_id' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id as string)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await getTradeBook(session.access_token, account.api_key);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.get('/api/orders/details', async (req, res) => {
+    try {
+        const { user_id, uniqueorderid } = req.query;
+        if (!user_id || !uniqueorderid) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id as string)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await getOrderDetails(session.access_token, account.api_key, uniqueorderid as string);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.post('/api/orders/ltp', async (req, res) => {
+    try {
+        const { user_id, exchange, tradingsymbol, symboltoken } = req.body;
+        if (!user_id || !exchange || !tradingsymbol || !symboltoken) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        const { data: accounts } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('broker_name', 'angelone')
+            .limit(1);
+
+        if (!accounts || accounts.length === 0) return res.status(404).json({ success: false, message: 'Angel One account not found' });
+        const account = accounts[0];
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
+
+        const result = await getLtpData(session.access_token, account.api_key, { exchange, tradingsymbol, symboltoken });
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });

@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 const OrderHistoryPage = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
 
     useEffect(() => {
         fetchHistory();
@@ -34,6 +35,67 @@ const OrderHistoryPage = () => {
         }
     };
 
+    const syncWithBroker = async () => {
+        setSyncing(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const API_BASE_URL = import.meta.env.VITE_API_URL;
+            const response = await fetch(`${API_BASE_URL}/api/orders/tradebook?user_id=${user.id}`);
+            const result = await response.json();
+
+            if (result.status && result.data) {
+                const { data: existing } = await supabase
+                    .from('order_history')
+                    .select('broker_order_id')
+                    .eq('user_id', user.id);
+
+                const existingIds = new Set(existing?.map(e => e.broker_order_id) || []);
+
+                const { data: accounts } = await supabase
+                    .from('demat_accounts')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('broker_name', 'angelone')
+                    .limit(1);
+
+                if (!accounts?.[0]) return alert('No Angel One account found to sync.');
+                const accountId = accounts[0].id;
+
+                const newTrades = result.data.filter(t => !existingIds.has(t.orderid));
+
+                if (newTrades.length > 0) {
+                    const inserts = newTrades.map(t => ({
+                        user_id: user.id,
+                        symbol: `${t.exchange}:${t.tradingsymbol}`,
+                        buy_sell: t.transactiontype,
+                        quantity: parseInt(t.fillsize),
+                        price: parseFloat(t.fillprice),
+                        status: 'Success',
+                        broker_order_id: t.orderid,
+                        executed_at: new Date().toISOString(),
+                        demat_account_id: accountId
+                    }));
+
+                    const { error } = await supabase.from('order_history').insert(inserts);
+                    if (error) throw error;
+                    alert(`Successfully synced ${newTrades.length} new trades from broker.`);
+                    fetchHistory();
+                } else {
+                    alert('Your history is already up to date.');
+                }
+            } else {
+                alert('No trade data received from broker.');
+            }
+        } catch (err) {
+            console.error('Sync error:', err);
+            alert('Failed to sync history: ' + err.message);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -42,6 +104,14 @@ const OrderHistoryPage = () => {
                     <p className="text-slate-500 mt-1 font-medium">Review all your past trade executions across clustered accounts.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={syncWithBroker}
+                        disabled={syncing}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                    >
+                        <RefreshCcw size={14} className={syncing ? 'animate-spin' : ''} />
+                        {syncing ? 'Syncing...' : 'Sync with Broker'}
+                    </button>
                     <button
                         onClick={fetchHistory}
                         className="p-2 bg-slate-800 text-slate-400 rounded-lg border border-slate-700 hover:text-white transition-colors"

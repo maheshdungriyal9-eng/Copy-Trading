@@ -121,3 +121,38 @@ export const cancelGTTRule = async (accessToken: string, apiKey: string, id: str
         throw error.response?.data || error;
     }
 };
+export const getTradeBook = async (accessToken: string, apiKey: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/order/v1/getTradeBook`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get Trade Book Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
+export const getOrderDetails = async (accessToken: string, apiKey: string, uniqueorderid: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/order/v1/details/${uniqueorderid}`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get Order Details Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
+export const getLtpData = async (accessToken: string, apiKey: string, params: { exchange: string, tradingsymbol: string, symboltoken: string }) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rest/secure/angelbroking/order/v1/getLtpData`, params, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get LTP Data Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
