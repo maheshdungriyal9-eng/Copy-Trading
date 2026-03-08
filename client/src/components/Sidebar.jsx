@@ -38,7 +38,7 @@ const Sidebar = () => {
             <div className="p-6">
                 <div className="flex items-center gap-3 text-indigo-500">
                     <Zap size={32} fill="currentColor" />
-                    <span className="text-xl font-bold tracking-tight text-white">AlgoDelta</span>
+                    <span className="text-xl font-bold tracking-tight text-white">FastCopyCall</span>
                 </div>
             </div>
 

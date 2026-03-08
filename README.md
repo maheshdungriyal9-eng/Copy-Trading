@@ -1,4 +1,4 @@
-# AlgoDelta Clone - Setup Guide
+# FastCopyCall - Setup Guide
 
 This guide will help you get the multi-account trading dashboard up and running on your local machine.
 

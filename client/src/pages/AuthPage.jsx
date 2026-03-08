@@ -60,7 +60,7 @@ const AuthPage = () => {
                         <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-1 ring-white/10">
                             <Shield className="text-white" size={24} />
                         </div>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">AlgoDelta</h1>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">FastCopyCall</h1>
                     </div>
 
                     <div className="max-w-md">
