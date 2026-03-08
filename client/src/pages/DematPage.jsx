@@ -220,6 +220,7 @@ const DematPage = () => {
 
         setIsValidating(true);
         try {
+            console.log('[Demat] Starting validation for:', formData.client_id);
             const API_BASE_URL = import.meta.env.VITE_API_URL || '';
             const validateRes = await fetch(`${API_BASE_URL}/api/demat/validate`, {
                 method: 'POST',
@@ -232,12 +233,27 @@ const DematPage = () => {
                 })
             });
 
+            console.log('[Demat] Validation response status:', validateRes.status);
+
+            if (!validateRes.ok) {
+                const errorData = await validateRes.json().catch(() => ({ message: 'Network error or invalid server response' }));
+                console.error('[Demat] Validation Failed (HTTP Error):', errorData);
+                alert(`Validation Failed: ${errorData.message || 'Server error'}`);
+                setIsValidating(false);
+                return; // STRICT BLOCK
+            }
+
             const validation = await validateRes.json();
+            console.log('[Demat] Validation JSON content:', validation);
+
             if (!validation.success) {
+                console.error('[Demat] Validation Failed (Logic Error):', validation.message);
                 alert(`Validation Failed: ${validation.message}`);
                 setIsValidating(false);
-                return;
+                return; // STRICT BLOCK
             }
+
+            console.log('[Demat] Validation passed. Proceeding to save to Supabase...');
 
             const { data, error } = await supabase
                 .from('demat_accounts')
@@ -250,8 +266,10 @@ const DematPage = () => {
                 .select();
 
             if (error) {
+                console.error('[Supabase] Error adding account:', error);
                 alert('Error adding account: ' + error.message);
             } else {
+                console.log('[Supabase] Account added successfully:', data);
                 setShowModal(false);
                 fetchAccounts();
                 setFormData({
@@ -266,7 +284,7 @@ const DematPage = () => {
                 });
             }
         } catch (err) {
-            console.error('Error during validation:', err);
+            console.error('[Demat] Unexpected error during validation:', err);
             alert('Error validating credentials. Please try again.');
         } finally {
             setIsValidating(false);
