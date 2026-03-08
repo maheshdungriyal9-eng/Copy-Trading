@@ -85,11 +85,11 @@ export class AngelOneMarketData {
             return;
         }
 
-        console.log("Sending subscription to Angel One:", JSON.stringify(tokens));
+        console.log("Sending subscription to Angel One (QUOTE mode):", JSON.stringify(tokens));
         this.ws.subscribe({
             correlationId: "watchlist",
             action: 1,
-            mode: 1,
+            mode: 3, // 3 for Quote (OHLC + LTP)
             exchangeTokens: tokens
         });
     }

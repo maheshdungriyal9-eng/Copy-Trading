@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Globe, ShieldCheck, MoreVertical, Search, Star, ArrowUpRight, ArrowDownRight, RefreshCcw } from 'lucide-react';
+import { Plus, Zap, Globe, ShieldCheck, MoreVertical, Search, Star, ArrowUpRight, ArrowDownRight, RefreshCcw, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { socket } from '../socket';
 
@@ -47,14 +47,14 @@ const WatchlistPage = () => {
         }
 
         socket.on('market_data', (data) => {
-            // Angel One WebSocketV2 uses 'tk' for token and 'ltp' for last traded price
             const token = data.tk || data.token;
-            const ltp = data.ltp || data.last_traded_price;
-
-            if (token && ltp) {
+            if (token) {
                 setPrices(prev => ({
                     ...prev,
-                    [token]: Number(ltp) / 100
+                    [token]: {
+                        ...prev[token],
+                        ...data
+                    }
                 }));
             }
         });
@@ -171,48 +171,85 @@ const WatchlistPage = () => {
                 </div>
             </header>
 
-            <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-md">
+            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-slate-800/30 border-b border-slate-800">
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Symbol</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Last Price</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Type</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Exchange</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center w-24">Action</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest min-w-[200px]">Symbol</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Last Price</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Change</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Open</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">High</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Low</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Prev Close</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/50">
                         {loading ? (
-                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-widest italic">Synchronizing Feed...</td></tr>
-                        ) : scripts.map((script) => (
-                            <tr key={script.id} className="hover:bg-white/[0.02] transition-all group">
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-col">
-                                        <span className="font-black text-white group-hover:text-indigo-400 transition-colors uppercase tracking-tight text-sm">{script.symbol}</span>
-                                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest font-mono">Real-time</span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className={`font-mono font-black text-sm transition-colors duration-300 ${prices[script.symbol_token] ? 'text-emerald-400' : 'text-slate-600'}`}>
-                                        ₹{prices[script.symbol_token]?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className="px-2 py-1 bg-slate-950 border border-slate-800 text-[10px] text-slate-500 rounded-lg font-black uppercase tracking-widest">{script.script_type || 'EQUITY'}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{script.exchange}</span>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-3 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
-                                        <button className="px-4 py-1.5 bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-lg transition-all font-black text-[10px] uppercase tracking-widest">Buy</button>
-                                        <button className="px-4 py-1.5 bg-rose-600/10 text-rose-500 hover:bg-rose-600 hover:text-white rounded-lg transition-all font-black text-[10px] uppercase tracking-widest">Sell</button>
-                                        <button onClick={() => handleDeleteScript(script.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors bg-slate-800 rounded-lg">×</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                            <tr><td colSpan="8" className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-widest italic">Synchronizing Feed...</td></tr>
+                        ) : scripts.map((script) => {
+                            const data = prices[script.symbol_token] || {};
+                            const ltp = data.ltp ? Number(data.ltp) / 100 : 0;
+                            const prevClose = data.c ? Number(data.c) / 100 : 0;
+                            const open = data.o ? Number(data.o) / 100 : 0;
+                            const high = data.h ? Number(data.h) / 100 : 0;
+                            const low = data.l ? Number(data.l) / 100 : 0;
+
+                            const change = ltp - prevClose;
+                            const changePercent = prevClose ? (change / prevClose) * 100 : 0;
+                            const isPositive = change >= 0;
+
+                            return (
+                                <tr key={script.id} className="hover:bg-indigo-500/[0.03] transition-all group border-l-2 border-transparent hover:border-indigo-500">
+                                    <td className="px-6 py-3">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                            <button className="w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform">B</button>
+                                            <button className="w-7 h-7 flex items-center justify-center bg-rose-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-rose-500/20 hover:scale-110 transition-transform">S</button>
+                                            <button
+                                                onClick={() => handleDeleteScript(script.id)}
+                                                className="w-7 h-7 flex items-center justify-center bg-slate-800 text-slate-500 hover:text-rose-400 rounded transition-colors"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-white group-hover:text-indigo-400 transition-colors uppercase tracking-tight text-sm">
+                                                {script.exchange}-{script.symbol}
+                                            </span>
+                                            <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter">Equity Segment</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <div className={`flex flex-col items-center gap-0.5 font-bold text-sm ${isPositive ? 'text-emerald-400' : 'text-rose-500'}`}>
+                                            <div className="flex items-center gap-1">
+                                                {ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className={`text-[11px] font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-500'}`}>
+                                            {isPositive ? '+' : ''}{change.toFixed(2)} ({isPositive ? '+' : ''}{changePercent.toFixed(2)}%)
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className="text-xs font-medium text-slate-300">{open.toFixed(2)}</span>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className="text-xs font-medium text-slate-300">{high.toFixed(2)}</span>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className="text-xs font-medium text-slate-300">{low.toFixed(2)}</span>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className="text-xs font-medium text-slate-500">{prevClose.toFixed(2)}</span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
                 {!loading && scripts.length === 0 && (
