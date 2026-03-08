@@ -17,17 +17,26 @@ export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey
         const session = await smart_api.generateSession(clientId, pin, token);
 
         if (session.status) {
+            // Some SDK versions might flatten the data or return it slightly differently
+            const sessionData = session.data || session;
+
+            if (!sessionData.jwtToken) {
+                console.error('Angel One Session Status is TRUE but tokens are missing. Full Response:', JSON.stringify(session));
+                throw new Error('Login succeeded but tokens are missing in the response.');
+            }
+
             return {
                 success: true,
-                access_token: session.data.jwtToken,
-                refresh_token: session.data.refreshToken,
-                feed_token: session.data.feedToken
+                access_token: sessionData.jwtToken,
+                refresh_token: sessionData.refreshToken,
+                feed_token: sessionData.feedToken
             };
         } else {
+            console.error('Angel One Session Status is FALSE. Full Response:', JSON.stringify(session));
             throw new Error(session.message || 'Login failed');
         }
-    } catch (error) {
-        console.error('Angel One login error:', error);
+    } catch (error: any) {
+        console.error('Angel One login error:', error.message || error);
         throw error;
     }
 };
