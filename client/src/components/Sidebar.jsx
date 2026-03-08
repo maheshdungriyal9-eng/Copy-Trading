@@ -23,7 +23,6 @@ const Sidebar = () => {
     const menuItems = [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
         { name: 'Demat', icon: ShieldCheck, path: '/demat' },
-        { name: 'Static IP', icon: Zap, path: '/static-ip' },
         { name: 'Watch List', icon: Search, path: '/watchlist' },
         { name: 'Group', icon: Users, path: '/group' },
         { name: 'Order Manager', icon: Settings, path: '/order-manager' },
@@ -51,8 +50,8 @@ const Sidebar = () => {
                             key={item.name}
                             to={item.path}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive
-                                    ? 'bg-indigo-600/10 text-indigo-500'
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 text-indigo-500'
+                                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                                 }`}
                         >
                             <item.icon size={20} className={isActive ? 'text-indigo-500' : 'group-hover:text-slate-100'} />

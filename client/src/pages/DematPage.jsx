@@ -1,21 +1,185 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCcw, ShieldCheck, Trash2, Power, AlertCircle, LayoutGrid, Eye, EyeOff } from 'lucide-react';
+import {
+    Plus,
+    RefreshCw,
+    ShieldCheck,
+    Trash2,
+    Power,
+    AlertCircle,
+    LayoutGrid,
+    List,
+    Eye,
+    EyeOff,
+    MoreVertical,
+    LogOut,
+    Youtube,
+    Search,
+    ChevronDown,
+    ArrowUp,
+    CheckCircle2,
+    XCircle,
+    Clock,
+    Calendar,
+    Monitor
+} from 'lucide-react';
 import { supabase } from '../supabase';
+
+const DematAccountCard = ({ acc, onDelete }) => {
+    const [showMenu, setShowMenu] = useState(false);
+    const [tradingEnabled, setTradingEnabled] = useState(true);
+    const [mtlEnabled, setMtlEnabled] = useState(false);
+
+    return (
+        <div className="bg-[#1a1f2e] border border-slate-800 rounded-xl p-5 relative group animate-in zoom-in-95 duration-300">
+            {/* Header: Status, Name, Date and Top Actions */}
+            <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start gap-3">
+                    <div className={`mt-1.5 w-3 h-3 rounded-full ${acc.status === 'Active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500'}`}></div>
+                    <div>
+                        <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{acc.nickname || acc.client_id}</h3>
+                        <div className="flex items-center gap-1.5 text-slate-500 mt-1">
+                            <Calendar size={12} />
+                            <span className="text-[10px] font-medium">{new Date(acc.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                    {/* Action Menu Button */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowMenu(!showMenu)}
+                            className="p-1.5 bg-slate-800/50 hover:bg-slate-700 rounded-md text-slate-300 transition-colors border border-slate-700/50"
+                        >
+                            <MoreVertical size={16} />
+                        </button>
+
+                        {showMenu && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)}></div>
+                                <div className="absolute right-0 mt-2 w-48 bg-[#1a1f2e] border border-slate-700/50 rounded-lg shadow-2xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                                        <RefreshCw size={14} className="text-amber-500" />
+                                        Reconnect
+                                    </button>
+                                    <button className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                                        <Calendar size={14} className="text-emerald-500" />
+                                        Extend
+                                    </button>
+                                    <button
+                                        onClick={() => { onDelete(acc.id); setShowMenu(false); }}
+                                        className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+                                    >
+                                        <Trash2 size={14} className="text-rose-500" />
+                                        Delete
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <button className="p-1.5 bg-indigo-500/80 hover:bg-indigo-500 rounded-md text-white transition-colors">
+                        <LogOut size={16} />
+                    </button>
+                    <button className="p-1.5 bg-sky-500 hover:bg-sky-400 rounded-md text-white transition-colors">
+                        <Eye size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Trading Toggle & Margin */}
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Trading</span>
+                    <button
+                        onClick={() => setTradingEnabled(!tradingEnabled)}
+                        className={`w-9 h-4.5 rounded-full relative transition-colors ${tradingEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+                    >
+                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all ${tradingEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                    </button>
+                </div>
+                <div className="text-right">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2">Margin</span>
+                    <span className="text-sm font-bold text-slate-100">0</span>
+                </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-4 gap-y-6 gap-x-2 border-t border-slate-800/50 pt-4 mb-6 relative">
+                {/* Vertical Divider Line */}
+                <div className="absolute left-1/4 top-4 bottom-6 w-[1px] bg-slate-800/50"></div>
+                <div className="absolute left-2/4 top-4 bottom-6 w-[1px] bg-slate-800/50"></div>
+                <div className="absolute left-3/4 top-4 bottom-6 w-[1px] bg-slate-800/50"></div>
+
+                <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">In<br />Group</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">P&L</div>
+                    <div className="text-sm font-bold text-emerald-500">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">POS</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">Orders</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+
+                <div className="text-center">
+                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pending</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Complete</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Reject</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Cancel</div>
+                    <div className="text-sm font-bold text-slate-100">0</div>
+                </div>
+            </div>
+
+            {/* Bottom Toggles */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
+                        <Monitor size={12} className="text-slate-400" />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">MTL</span>
+                    <button
+                        onClick={() => setMtlEnabled(!mtlEnabled)}
+                        className={`w-9 h-4.5 rounded-full relative transition-colors ${mtlEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+                    >
+                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all ${mtlEnabled ? 'left-5' : 'left-0.5'}`}></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const DematPage = () => {
     const [accounts, setAccounts] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showPin, setShowPin] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [viewMode, setViewMode] = useState('grid');
     const [formData, setFormData] = useState({
-        broker_name: 'Angel One',
+        broker_name: 'angelone',
         nickname: '',
         client_id: '',
         api_key: '',
         totp_secret: '',
         mobile: '',
         email: '',
-        connect_with_ip: false
     });
 
     useEffect(() => {
@@ -68,14 +232,13 @@ const DematPage = () => {
             setShowModal(false);
             fetchAccounts();
             setFormData({
-                broker_name: 'Angel One',
+                broker_name: 'angelone',
                 nickname: '',
                 client_id: '',
                 api_key: '',
                 totp_secret: '',
                 mobile: '',
                 email: '',
-                connect_with_ip: false
             });
         }
     };
@@ -92,97 +255,133 @@ const DematPage = () => {
         }
     };
 
+    const filteredAccounts = accounts.filter(acc =>
+        (acc.nickname || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        acc.client_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-white">Demat Accounts</h1>
-                    <p className="text-slate-500 mt-1">Manage and monitor your connected broker accounts.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-all border border-slate-700">
-                        <RefreshCcw size={18} />
-                        Relogin All
-                    </button>
+        <div className="p-6 max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500">
+            {/* Header: Title, Add Button, View Toggles, How to Connect */}
+            <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-2xl font-bold text-white tracking-tight">Demat</h1>
                     <button
                         onClick={() => setShowModal(true)}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#0088ff] hover:bg-[#0077ee] text-white font-bold rounded-lg transition-all shadow-lg shadow-sky-500/10 active:scale-95 text-xs whitespace-nowrap"
                     >
-                        <Plus size={18} />
+                        <Plus size={16} strokeWidth={3} />
                         Add Demat Account
+                    </button>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-4">
+                    {/* View Toggle */}
+                    <div className="flex items-center bg-[#1a1f2e] border border-slate-800 p-1 rounded-lg">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-[#0088ff] text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <LayoutGrid size={18} />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-[#0088ff] text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <List size={18} />
+                        </button>
+                    </div>
+
+                    {/* How to Connect */}
+                    <a
+                        href="#"
+                        className="flex items-center gap-2 text-slate-100 hover:text-white transition-colors text-sm font-bold border-b-2 border-slate-700 pb-0.5"
+                    >
+                        How To Connect
+                        <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center">
+                            <Youtube size={14} fill="white" className="text-red-600" />
+                        </div>
+                    </a>
+
+                    {/* Relogin All */}
+                    <button className="flex items-center gap-2 px-4 py-2 bg-[#00c853] hover:bg-[#00b24a] text-white font-bold rounded-lg transition-all shadow-lg shadow-emerald-500/10 active:scale-95 text-xs">
+                        <LogOut size={16} className="rotate-180" />
+                        Relogin All Demat
                     </button>
                 </div>
             </header>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <table className="w-full text-left">
-                    <thead>
-                        <tr className="bg-slate-800/50 border-b border-slate-800">
-                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Broker / Nickname</th>
-                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">With IP</th>
-                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                        {loading ? (
-                            <tr><td colSpan="4" className="px-6 py-12 text-center text-slate-500 italic">Finding your accounts...</td></tr>
-                        ) : accounts.map((acc) => (
-                            <tr key={acc.id} className="hover:bg-slate-800/30 transition-colors group">
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-col">
-                                        <span className="font-semibold text-white uppercase">{acc.broker_name}</span>
-                                        <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter">{acc.nickname}</span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${acc.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                                        {acc.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <div className={`w-2 h-2 rounded-full mx-auto ${acc.connect_with_ip ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-slate-700'}`}></div>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button className="p-2 text-slate-500 hover:text-white transition-colors">
-                                            <Power size={18} />
-                                        </button>
-                                        <button onClick={() => deleteAccount(acc.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors">
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {!loading && accounts.length === 0 && (
-                            <tr><td colSpan="6" className="px-6 py-12 text-center text-slate-500 italic">No accounts linked yet.</td></tr>
-                        )}
-                    </tbody>
-                </table>
+            {/* Sub-Header: Search and Filters */}
+            <div className="flex flex-col md:flex-row items-center gap-3">
+                <div className="relative flex-1 group">
+                    <input
+                        type="text"
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-[#1a1f2e] border border-slate-800 rounded-lg pl-4 pr-10 py-2.5 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm font-medium"
+                    />
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="relative group w-full md:w-48">
+                        <select className="w-full appearance-none bg-[#1a1f2e] border border-slate-800 rounded-lg px-4 py-2.5 text-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm font-medium cursor-pointer">
+                            <option>Sort By</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none group-focus-within:text-sky-500 transition-colors" size={16} />
+                    </div>
+
+                    <button className="p-2.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg transition-colors flex-shrink-0">
+                        <ArrowUp size={18} />
+                    </button>
+
+                    <button className="p-2.5 bg-[#8e24aa] hover:bg-[#7b1fa2] text-white rounded-lg transition-colors flex-shrink-0">
+                        <RefreshCw size={18} />
+                    </button>
+                </div>
             </div>
 
+            {/* Main Content: Grid or Empty State */}
+            {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="h-[340px] bg-[#1a1f2e]/50 border border-slate-800 rounded-xl animate-pulse"></div>
+                    ))}
+                </div>
+            ) : filteredAccounts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredAccounts.map((acc) => (
+                        <DematAccountCard key={acc.id} acc={acc} onDelete={deleteAccount} />
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center py-24 bg-[#1a1f2e]/30 border border-slate-800 border-dashed rounded-2xl">
+                    <ShieldCheck size={48} className="text-slate-700 mb-4" />
+                    <p className="text-slate-500 font-medium">No demat accounts found matching your search.</p>
+                </div>
+            )}
+
+            {/* Add Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-[#1a1f2e] border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
                         <form onSubmit={handleAddAccount}>
-                            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-indigo-600/5">
+                            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-sky-500/5">
                                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <ShieldCheck className="text-indigo-400" />
+                                    <Plus className="text-sky-400" strokeWidth={3} />
                                     Add Demat Account
                                 </h3>
                                 <button type="button" onClick={() => setShowModal(false)} className="text-slate-500 hover:text-white transition-colors text-2xl">×</button>
                             </div>
                             <div className="p-6 space-y-6">
-                                {/* Top Row: Broker, Nickname, Mobile No, Extra No */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="space-y-1.5">
                                         <select
                                             value={formData.broker_name}
                                             onChange={(e) => setFormData({ ...formData, broker_name: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-medium text-sm"
                                         >
-                                            <option>angelone</option>
+                                            <option value="angelone">angelone</option>
                                         </select>
                                     </div>
                                     <div className="space-y-1.5">
@@ -190,7 +389,7 @@ const DematPage = () => {
                                             type="text"
                                             value={formData.nickname}
                                             onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="Enter Nickname"
                                             required
                                         />
@@ -200,7 +399,7 @@ const DematPage = () => {
                                             type="text"
                                             value={formData.mobile}
                                             onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="Enter Mobile No."
                                             required
                                         />
@@ -210,39 +409,21 @@ const DematPage = () => {
                                             type="email"
                                             value={formData.email}
                                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="Enter Email"
                                             required
                                         />
                                     </div>
                                 </div>
 
-                                {/* Second Row: Connect with IP Setting */}
-                                <div className="flex items-center gap-8">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-1 text-slate-400">
-                                            <AlertCircle size={14} />
-                                            <span className="text-xs font-medium text-slate-300">Connect with IP?</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, connect_with_ip: !formData.connect_with_ip })}
-                                            className={`w-10 h-5 rounded-full relative transition-colors ${formData.connect_with_ip ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                                        >
-                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${formData.connect_with_ip ? 'left-6' : 'left-1'}`}></div>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Third Block: Angelone Details */}
                                 <div className="space-y-4">
-                                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Enter Angelone Details</h4>
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Enter Angelone Details</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                         <input
                                             type="text"
                                             value={formData.client_id}
                                             onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="Angel ID"
                                             maxLength={7}
                                             required
@@ -252,14 +433,14 @@ const DematPage = () => {
                                                 type={showPin ? "text" : "password"}
                                                 value={formData.password || ''}
                                                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg pl-4 pr-10 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-4 pr-10 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                                 placeholder="Angel 4 Digit pin"
                                                 maxLength={4}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPin(!showPin)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition-colors"
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-sky-400 transition-colors"
                                             >
                                                 {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
                                             </button>
@@ -268,7 +449,7 @@ const DematPage = () => {
                                             type="text"
                                             value={formData.api_key}
                                             onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="API Key"
                                             required
                                         />
@@ -276,7 +457,7 @@ const DematPage = () => {
                                             type="text"
                                             value={formData.totp_secret}
                                             onChange={(e) => setFormData({ ...formData, totp_secret: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="TOTP Key"
                                             required
                                         />
@@ -284,17 +465,17 @@ const DematPage = () => {
                                 </div>
                             </div>
 
-                            <div className="p-4 bg-slate-800/20 flex justify-end gap-3 border-t border-slate-800/50">
+                            <div className="p-4 bg-black/20 flex justify-end gap-3 border-t border-slate-800">
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className="px-6 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-md transition-all text-sm"
+                                    className="px-8 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg transition-all text-sm"
                                 >
                                     Close
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-6 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-md transition-all text-sm"
+                                    className="px-8 py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-lg transition-all text-sm"
                                 >
                                     Add
                                 </button>

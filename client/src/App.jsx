@@ -4,7 +4,6 @@ import { supabase } from './supabase'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import DematPage from './pages/DematPage'
-import StaticIPPage from './pages/StaticIPPage'
 import WatchlistPage from './pages/WatchlistPage'
 import GroupPage from './pages/GroupPage'
 import OrderManagerPage from './pages/OrderManagerPage'
@@ -66,7 +65,6 @@ function App() {
                                     <Routes>
                                         <Route path="/" element={<Dashboard />} />
                                         <Route path="/demat" element={<DematPage />} />
-                                        <Route path="/static-ip" element={<StaticIPPage />} />
                                         <Route path="/watchlist" element={<WatchlistPage />} />
                                         <Route path="/group" element={<GroupPage />} />
                                         <Route path="/order-manager" element={<OrderManagerPage />} />
