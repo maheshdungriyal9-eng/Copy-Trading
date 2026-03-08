@@ -50,33 +50,39 @@ app.post('/api/instruments/sync', async (req, res) => {
         await syncInstruments();
         res.json({ success: true });
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
-});
+        app.post('/api/market/quote', async (req, res) => {
+            try {
+                const { mode, exchangeTokens } = req.body;
+                const result = await marketDataHandler.getQuote(mode, exchangeTokens);
+                res.json(result);
+            } catch (error: any) {
+                res.status(500).json({ error: error.message });
+            }
+        });
 
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
+        io.on('connection', (socket) => {
+            console.log('A user connected:', socket.id);
 
-    // Initialize market data for the user if they provide their userId
-    socket.on('init_market_data', async (userId: string) => {
-        console.log(`Initializing market data for user: ${userId}`);
-        await marketDataHandler.initialize(userId);
-    });
+            // Initialize market data for the user if they provide their userId
+            socket.on('init_market_data', async (userId: string) => {
+                console.log(`Initializing market data for user: ${userId}`);
+                await marketDataHandler.initialize(userId);
+            });
 
-    socket.on('subscribe_symbols', (tokens: any) => {
-        console.log('Subscribing to tokens:', tokens);
-        marketDataHandler.subscribe(tokens);
-    });
+            socket.on('subscribe_symbols', (tokens: any) => {
+                console.log('Subscribing to tokens:', tokens);
+                marketDataHandler.subscribe(tokens);
+            });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-    });
-});
+            socket.on('disconnect', () => {
+                console.log('User disconnected:', socket.id);
+            });
+        });
 
-const PORT = process.env.PORT || 5000;
+        const PORT = process.env.PORT || 5000;
 
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    // Sync/Load instruments on startup
-    loadInstruments();
-});
+        httpServer.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+            // Sync/Load instruments on startup
+            loadInstruments();
+        });

@@ -1,5 +1,6 @@
 import { WebSocketV2 } from "smartapi-javascript";
 import { Server } from "socket.io";
+import axios from 'axios';
 import { supabase } from "./supabase";
 import { loginAngelOne } from "./brokers/angelone";
 
@@ -92,5 +93,58 @@ export class AngelOneMarketData {
             mode: 3, // 3 for Quote (OHLC + LTP)
             exchangeTokens: tokens
         });
+    }
+
+    async getQuote(mode: 'FULL' | 'OHLC' | 'LTP', exchangeTokens: any) {
+        if (!this.isConnected || !this.ws) {
+            return { success: false, message: "Market data session not initialized" };
+        }
+
+        try {
+            const { data: accounts } = await supabase
+                .from('demat_accounts')
+                .select('*')
+                .eq('user_id', this.userId)
+                .eq('broker_name', 'angelone')
+                .limit(1);
+
+            if (!accounts || accounts.length === 0) {
+                return { success: false, message: "No Angel One account found" };
+            }
+
+            const account = accounts[0];
+            const session = await loginAngelOne(
+                account.client_id,
+                account.totp_secret,
+                account.api_key,
+                account.password
+            );
+
+            const response = await axios.post(
+                "https://apiconnect.angelbroking.com/rest/secure/angelbroking/market/v1/quote/",
+                {
+                    mode,
+                    exchangeTokens
+                },
+                {
+                    headers: {
+                        "X-PrivateKey": account.api_key,
+                        "Accept": "application/json",
+                        "X-SourceID": "WEB",
+                        "X-ClientLocalIP": "127.0.0.1",
+                        "X-ClientPublicIP": "127.0.0.1",
+                        "X-MACAddress": "00-00-00-00-00-00",
+                        "X-UserType": "USER",
+                        "Authorization": `Bearer ${session.access_token}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            return response.data;
+        } catch (err: any) {
+            console.error("Failed to fetch quote from Angel One:", err.message);
+            return { success: false, message: err.message };
+        }
     }
 }
