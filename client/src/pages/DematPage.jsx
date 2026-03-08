@@ -27,7 +27,38 @@ import { supabase } from '../supabase';
 const DematAccountCard = ({ acc, onDelete, onView }) => {
     const [showMenu, setShowMenu] = useState(false);
     const [tradingEnabled, setTradingEnabled] = useState(true);
-    const [mtlEnabled, setMtlEnabled] = useState(false);
+    const [stats, setStats] = useState({
+        margin: '0',
+        pnl: '0',
+        positions_count: 0,
+        in_group: 0,
+        counts: {
+            total: 0,
+            pending: 0,
+            complete: 0,
+            reject: 0,
+            cancel: 0
+        }
+    });
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+                const res = await fetch(`${API_BASE_URL}/api/demat/summary/${acc.id}`);
+                const result = await res.json();
+                if (result.success) {
+                    setStats(result.data);
+                }
+            } catch (err) {
+                console.error('Error fetching demat stats:', err);
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+        fetchStats();
+    }, [acc.id]);
 
     return (
         <div className="bg-[#1a1f2e] border border-slate-800 rounded-xl p-5 relative group animate-in zoom-in-95 duration-300">
@@ -103,7 +134,9 @@ const DematAccountCard = ({ acc, onDelete, onView }) => {
                 </div>
                 <div className="text-right">
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2">Margin</span>
-                    <span className="text-sm font-bold text-slate-100">0</span>
+                    <span className="text-sm font-bold text-slate-100 italic">
+                        {loadingStats ? '...' : `₹${stats.margin}`}
+                    </span>
                 </div>
             </div>
 
@@ -116,52 +149,48 @@ const DematAccountCard = ({ acc, onDelete, onView }) => {
 
                 <div className="text-center">
                     <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">In<br />Group</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.in_group}</div>
                 </div>
                 <div className="text-center">
                     <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">P&L</div>
-                    <div className="text-sm font-bold text-emerald-500">0</div>
+                    <div className={`text-sm font-bold ${Number(stats.pnl) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        ₹{stats.pnl}
+                    </div>
                 </div>
                 <div className="text-center">
                     <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">POS</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.positions_count}</div>
                 </div>
                 <div className="text-center">
                     <div className="text-[10px] font-bold text-slate-500 uppercase leading-tight mb-1">Orders</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.counts.total}</div>
                 </div>
 
                 <div className="text-center">
                     <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pending</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.counts.pending}</div>
                 </div>
                 <div className="text-center">
                     <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Complete</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.counts.complete}</div>
                 </div>
                 <div className="text-center">
                     <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Reject</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.counts.reject}</div>
                 </div>
                 <div className="text-center">
                     <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Cancel</div>
-                    <div className="text-sm font-bold text-slate-100">0</div>
+                    <div className="text-sm font-bold text-slate-100">{stats.counts.cancel}</div>
                 </div>
             </div>
 
-            {/* Bottom Toggles */}
-            <div className="flex items-center justify-between">
+            {/* Bottom Section - Empty since MTL removed */}
+            <div className="flex items-center justify-between opacity-0 pointer-events-none">
                 <div className="flex items-center gap-3">
                     <div className="w-5 h-5 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
                         <Monitor size={12} className="text-slate-400" />
                     </div>
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">MTL</span>
-                    <button
-                        onClick={() => setMtlEnabled(!mtlEnabled)}
-                        className={`w-9 h-4.5 rounded-full relative transition-colors ${mtlEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                    >
-                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all ${mtlEnabled ? 'left-5' : 'left-0.5'}`}></div>
-                    </button>
                 </div>
             </div>
         </div>

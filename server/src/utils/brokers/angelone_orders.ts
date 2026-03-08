@@ -156,3 +156,26 @@ export const getLtpData = async (accessToken: string, apiKey: string, params: { 
         throw error.response?.data || error;
     }
 };
+export const getRMS = async (accessToken: string, apiKey: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/user/v1/getRMS`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get RMS Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
+export const getPositions = async (accessToken: string, apiKey: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/order/v1/getPosition`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get Positions Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};

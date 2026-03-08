@@ -20,7 +20,7 @@ app.use(express.json());
 import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
-import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData } from './utils/brokers/angelone_orders';
+import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData, getRMS, getPositions } from './utils/brokers/angelone_orders';
 import { loginAngelOne } from './utils/brokers/angelone';
 import { supabase } from './utils/supabase';
 
@@ -396,6 +396,51 @@ app.post('/api/gtt/cancel', async (req, res) => {
         const result = await cancelGTTRule(session.access_token, account.api_key, id, symboltoken, exchange);
         res.json(result);
     } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+    }
+});
+
+app.get('/api/demat/summary/:account_id', async (req, res) => {
+    try {
+        const { account_id } = req.params;
+        const { data: account, error: accError } = await supabase
+            .from('demat_accounts')
+            .select('*')
+            .eq('id', account_id)
+            .single();
+
+        if (accError || !account) return res.status(404).json({ success: false, message: 'Account not found' });
+
+        const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
+        if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate' });
+
+        // Concurrently fetch all required data
+        const [rms, positions, orderBook, groupsCount] = await Promise.all([
+            getRMS(session.access_token, account.api_key),
+            getPositions(session.access_token, account.api_key),
+            getOrderBook(session.access_token, account.api_key),
+            supabase.from('group_accounts').select('id', { count: 'exact' }).eq('demat_account_id', account_id)
+        ]);
+
+        // Process Results
+        const orders = orderBook.data || [];
+        const stats = {
+            margin: rms.data?.net || '0',
+            pnl: positions.data?.netpnl || '0',
+            positions_count: positions.data?.length || 0,
+            in_group: groupsCount.count || 0,
+            counts: {
+                total: orders.length,
+                pending: orders.filter((o: any) => o.status === 'open' || o.status === 'validation pending').length,
+                complete: orders.filter((o: any) => o.status === 'complete').length,
+                reject: orders.filter((o: any) => o.status === 'rejected').length,
+                cancel: orders.filter((o: any) => o.status === 'cancelled').length,
+            }
+        };
+
+        res.json({ success: true, data: stats });
+    } catch (error: any) {
+        console.error('[Summary API] Error:', error.message);
         res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
 });
