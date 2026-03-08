@@ -179,7 +179,8 @@ app.post('/api/orders/execute', async (req, res) => {
                 status: 'Success',
                 broker_order_id: result.data.orderid,
                 executed_at: new Date().toISOString(),
-                demat_account_id: account.id
+                demat_account_id: account.id,
+                source: 'app'
             });
         }
 
@@ -219,7 +220,8 @@ app.post('/api/gtt/create', async (req, res) => {
                 status: 'GTT Created',
                 broker_order_id: result.data.id,
                 executed_at: new Date().toISOString(),
-                demat_account_id: account.id
+                demat_account_id: account.id,
+                source: 'app'
             });
         }
 

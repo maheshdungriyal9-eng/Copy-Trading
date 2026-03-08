@@ -25,6 +25,7 @@ const OrderHistoryPage = () => {
                     demat_accounts (nickname)
                 `)
                 .eq('user_id', user.id)
+                .eq('source', 'app')
                 .order('executed_at', { ascending: false });
 
             if (!error) setHistory(data || []);
@@ -75,7 +76,8 @@ const OrderHistoryPage = () => {
                         status: 'Success',
                         broker_order_id: t.orderid,
                         executed_at: new Date().toISOString(),
-                        demat_account_id: accountId
+                        demat_account_id: accountId,
+                        source: 'broker'
                     }));
 
                     const { error } = await supabase.from('order_history').insert(inserts);
