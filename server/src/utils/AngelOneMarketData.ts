@@ -10,6 +10,8 @@ export class AngelOneMarketData {
     private userId: string | null = null;
     private isConnected: boolean = false;
     private subscriptionQueue: any[] = [];
+    private session: any = null;
+    private account: any = null;
 
     constructor(io: Server) {
         this.io = io;
@@ -17,12 +19,13 @@ export class AngelOneMarketData {
 
     async initialize(userId: string) {
         if (this.userId === userId && this.isConnected) {
-            console.log("Market data already initialized for this user");
+            console.log(`[MarketData] Already initialized for user: ${userId}`);
             return;
         }
 
         this.userId = userId;
         try {
+            console.log(`[MarketData] Initializing for user: ${userId}`);
             const { data: accounts, error } = await supabase
                 .from('demat_accounts')
                 .select('*')
@@ -31,35 +34,33 @@ export class AngelOneMarketData {
                 .limit(1);
 
             if (error || !accounts || accounts.length === 0) {
-                console.error('No Angel One account found for market data');
+                console.error('[MarketData] No Angel One account found');
                 return;
             }
 
-            const account = accounts[0];
-            const session = await loginAngelOne(
-                account.client_id,
-                account.totp_secret,
-                account.api_key,
-                account.password
-            );
+            this.account = accounts[0];
+            await this.ensureSession();
 
-            if (!session.success) return;
+            if (!this.session?.success) return;
+
+            if (this.ws) {
+                try { this.ws.close(); } catch (e) { }
+            }
 
             this.ws = new WebSocketV2({
-                jwttoken: session.access_token,
-                apikey: account.api_key,
-                clientcode: account.client_id,
-                feedtype: session.feed_token
+                jwttoken: this.session.access_token,
+                apikey: this.account.api_key,
+                clientcode: this.account.client_id,
+                feedtype: this.session.feed_token
             });
 
             this.ws.connect();
 
             this.ws.on("connect", () => {
-                console.log("Angel One WebSocket Connected");
+                console.log("[MarketData] WebSocket Connected");
                 this.isConnected = true;
-                // Process queued subscriptions
                 if (this.subscriptionQueue.length > 0) {
-                    console.log(`Processing ${this.subscriptionQueue.length} queued subscriptions`);
+                    console.log(`[MarketData] Processing ${this.subscriptionQueue.length} queued subscriptions`);
                     this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
                     this.subscriptionQueue = [];
                 }
@@ -70,55 +71,67 @@ export class AngelOneMarketData {
             });
 
             this.ws.on("error", (err: any) => {
-                console.error("Angel One WebSocket Error:", err);
+                console.error("[MarketData] WebSocket Error:", err);
                 this.isConnected = false;
             });
 
         } catch (err) {
-            console.error("Failed to initialize Angel One Market Data:", err);
+            console.error("[MarketData] Failed to initialize:", err);
         }
+    }
+
+    private async ensureSession() {
+        if (this.session && this.session.success) return;
+
+        console.log(`[MarketData] Generating new Angel One session for ${this.account.client_id}`);
+        this.session = await loginAngelOne(
+            this.account.client_id,
+            this.account.totp_secret,
+            this.account.api_key,
+            this.account.password
+        );
+        return this.session;
     }
 
     subscribe(tokens: { exchangeType: number, tokens: string[] }[]) {
         if (!this.isConnected || !this.ws) {
-            console.log("WebSocket not connected, queuing subscription");
+            console.log("[MarketData] WebSocket not connected, queuing subscription");
             this.subscriptionQueue.push(tokens);
             return;
         }
 
-        console.log("Sending subscription to Angel One (QUOTE mode):", JSON.stringify(tokens));
+        console.log("[MarketData] Subscribing:", JSON.stringify(tokens));
         this.ws.subscribe({
             correlationId: "watchlist",
             action: 1,
-            mode: 3, // 3 for Quote (OHLC + LTP)
+            mode: 3,
             exchangeTokens: tokens
         });
     }
 
     async getQuote(mode: 'FULL' | 'OHLC' | 'LTP', exchangeTokens: any) {
-        if (!this.isConnected || !this.ws) {
-            return { success: false, message: "Market data session not initialized" };
-        }
-
         try {
-            const { data: accounts } = await supabase
-                .from('demat_accounts')
-                .select('*')
-                .eq('user_id', this.userId)
-                .eq('broker_name', 'angelone')
-                .limit(1);
+            // Ensure we have an account and session even if initialize(userId) hasn't finished
+            if (!this.account || !this.session) {
+                console.log("[MarketData] getQuote triggered before full initialization, attempting late init...");
+                // Note: We need userId for this, but if we don't have it, we use the last one
+                if (!this.userId) return { success: false, message: "User session not found" };
 
-            if (!accounts || accounts.length === 0) {
-                return { success: false, message: "No Angel One account found" };
+                const { data: accounts } = await supabase
+                    .from('demat_accounts')
+                    .select('*')
+                    .eq('user_id', this.userId)
+                    .eq('broker_name', 'angelone')
+                    .limit(1);
+
+                if (!accounts || accounts.length === 0) return { success: false, message: "Account not found" };
+                this.account = accounts[0];
+                await this.ensureSession();
+            } else {
+                await this.ensureSession();
             }
 
-            const account = accounts[0];
-            const session = await loginAngelOne(
-                account.client_id,
-                account.totp_secret,
-                account.api_key,
-                account.password
-            );
+            console.log(`[MarketData] Fetching ${mode} quote for:`, JSON.stringify(exchangeTokens));
 
             const response = await axios.post(
                 "https://apiconnect.angelone.in/rest/secure/angelbroking/market/v1/quote/",
@@ -128,22 +141,23 @@ export class AngelOneMarketData {
                 },
                 {
                     headers: {
-                        "X-PrivateKey": account.api_key,
+                        "X-PrivateKey": this.account.api_key,
                         "Accept": "application/json",
                         "X-SourceID": "WEB",
                         "X-ClientLocalIP": "127.0.0.1",
                         "X-ClientPublicIP": "127.0.0.1",
                         "X-MACAddress": "00-00-00-00-00-00",
                         "X-UserType": "USER",
-                        "Authorization": `Bearer ${session.access_token}`,
+                        "Authorization": `Bearer ${this.session.access_token}`,
                         "Content-Type": "application/json"
                     }
                 }
             );
 
+            console.log(`[MarketData] ${mode} Quote Result status: ${response.data.status}`);
             return response.data;
         } catch (err: any) {
-            console.error("Failed to fetch quote from Angel One:", err.message);
+            console.error("[MarketData] Failed to fetch quote:", err.response?.data || err.message);
             return { success: false, message: err.message };
         }
     }

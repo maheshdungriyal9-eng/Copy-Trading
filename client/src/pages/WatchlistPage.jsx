@@ -47,6 +47,7 @@ const WatchlistPage = () => {
         }
 
         socket.on('market_data', (data) => {
+            console.log('[Socket] Tick received:', data);
             const token = data.tk || data.token;
             if (token) {
                 setPrices(prev => ({
@@ -137,15 +138,17 @@ const WatchlistPage = () => {
             });
 
             const result = await response.json();
+            console.log('[MarketData] Prime Result:', result);
             if (result.status && result.data.fetched) {
                 const initialPrices = {};
                 result.data.fetched.forEach(item => {
+                    console.log(`[MarketData] Mapping ${item.tradingSymbol}:`, item);
                     initialPrices[item.symbolToken] = {
-                        ltp: item.ltp * 100, // Normalize to cents for the existing format if needed, but let's check WatchlistPage.jsx line 227-231
+                        ltp: item.ltp * 100,
                         o: item.open * 100,
                         h: item.high * 100,
                         l: item.low * 100,
-                        c: item.close * 100, // previous close
+                        c: item.close * 100,
                         tk: item.symbolToken
                     };
                 });
