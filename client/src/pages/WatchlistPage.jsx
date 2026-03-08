@@ -18,7 +18,8 @@ const WatchlistPage = () => {
             if (searchQuery.length > 1) {
                 setSearching(true);
                 try {
-                    const response = await fetch(`http://localhost:5000/api/instruments/search?query=${searchQuery}`);
+                    const API_BASE_URL = import.meta.env.VITE_API_URL;
+                    const response = await fetch(`${API_BASE_URL}/api/instruments/search?query=${searchQuery}`);
                     const data = await response.json();
                     setFilteredInstruments(data);
                 } catch (error) {
