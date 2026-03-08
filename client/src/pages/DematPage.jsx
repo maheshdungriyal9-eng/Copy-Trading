@@ -300,8 +300,12 @@ const DematPage = () => {
                 .delete()
                 .eq('id', id);
 
-            if (error) alert('Error deleting account');
-            else fetchAccounts();
+            if (error) {
+                console.error('Error deleting account:', error);
+                alert(`Error deleting account: ${error.message}${error.details ? ` (${error.details})` : ''}\n\nTip: If this account is part of a Copy Trading Group, remove it from the group first.`);
+            } else {
+                fetchAccounts();
+            }
         }
     };
 
