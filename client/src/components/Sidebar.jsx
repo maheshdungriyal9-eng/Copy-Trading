@@ -27,7 +27,6 @@ const Sidebar = () => {
         { name: 'Orders & GTT', icon: ListTodo, path: '/orders' },
         { name: 'Order History', icon: History, path: '/order-history' },
         { name: 'Group Manager', icon: Users, path: '/group' },
-        { name: 'Wallet', icon: Wallet, path: '/wallet' },
         { name: 'Activity Logs', icon: Activity, path: '/activity-logs' },
         { name: 'Profile', icon: UserCircle, path: '/profile' },
     ];
