@@ -152,7 +152,16 @@ const GroupPage = () => {
         if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
 
         try {
-            // 1. Delete mappings first due to foreign key constraints if any (though usually Cascade is better)
+            setLoading(true);
+            // 1. Delete dependents first - order_history (prevents 409 conflict)
+            const { error: historyError } = await supabase
+                .from('order_history')
+                .delete()
+                .eq('group_id', groupId);
+
+            if (historyError) throw historyError;
+
+            // 2. Delete mappings
             const { error: mappingError } = await supabase
                 .from('group_accounts')
                 .delete()
@@ -160,7 +169,7 @@ const GroupPage = () => {
 
             if (mappingError) throw mappingError;
 
-            // 2. Delete the group
+            // 3. Delete the group
             const { error: groupError } = await supabase
                 .from('groups')
                 .delete()
@@ -171,7 +180,9 @@ const GroupPage = () => {
             fetchData();
         } catch (error) {
             console.error('Error deleting group:', error);
-            alert('Failed to delete group. Please try again.');
+            alert(`Failed to delete group: ${error.message || 'Unknown error'}`);
+        } finally {
+            setLoading(false);
         }
     };
 
