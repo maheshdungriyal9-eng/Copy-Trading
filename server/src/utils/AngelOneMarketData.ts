@@ -18,14 +18,11 @@ export class AngelOneMarketData {
     }
 
     async initialize(userId: string) {
-        if (this.userId === userId && this.isConnected) {
-            console.log(`[MarketData] Already initialized for user: ${userId}`);
-            return;
-        }
-
+        // Even if userId is same, we might want to refresh account data if they updated it
+        console.log(`[MarketData] Initializing for user: ${userId}`);
         this.userId = userId;
+
         try {
-            console.log(`[MarketData] Initializing for user: ${userId}`);
             const { data: accounts, error } = await supabase
                 .from('demat_accounts')
                 .select('*')
@@ -38,42 +35,55 @@ export class AngelOneMarketData {
                 return;
             }
 
-            this.account = accounts[0];
+            // Check if account has changed (API Key, etc.)
+            const newAccount = accounts[0];
+            if (this.account && (this.account.api_key !== newAccount.api_key || this.account.client_id !== newAccount.client_id)) {
+                console.log(`[MarketData] Account credentials changed, clearing session...`);
+                this.session = null;
+                this.isConnected = false;
+            }
+
+            this.account = newAccount;
             await this.ensureSession();
 
             if (!this.session?.success) return;
 
-            if (this.ws) {
-                try { this.ws.close(); } catch (e) { }
-            }
-
-            this.ws = new WebSocketV2({
-                jwttoken: this.session.access_token,
-                apikey: this.account.api_key,
-                clientcode: this.account.client_id,
-                feedtype: this.session.feed_token
-            });
-
-            this.ws.connect();
-
-            this.ws.on("connect", () => {
-                console.log("[MarketData] WebSocket Connected");
-                this.isConnected = true;
-                if (this.subscriptionQueue.length > 0) {
-                    console.log(`[MarketData] Processing ${this.subscriptionQueue.length} queued subscriptions`);
-                    this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
-                    this.subscriptionQueue = [];
+            // Only reconnect if not already connected or account changed
+            if (this.ws && this.isConnected) {
+                console.log("[MarketData] WebSocket already connected and account unchanged.");
+            } else {
+                if (this.ws) {
+                    try { this.ws.close(); } catch (e) { }
                 }
-            });
 
-            this.ws.on("tick", (tick: any) => {
-                this.io.emit('market_data', tick);
-            });
+                this.ws = new WebSocketV2({
+                    jwttoken: this.session.access_token,
+                    apikey: this.account.api_key,
+                    clientcode: this.account.client_id,
+                    feedtype: this.session.feed_token
+                });
 
-            this.ws.on("error", (err: any) => {
-                console.error("[MarketData] WebSocket Error:", err);
-                this.isConnected = false;
-            });
+                this.ws.connect();
+
+                this.ws.on("connect", () => {
+                    console.log("[MarketData] WebSocket Connected");
+                    this.isConnected = true;
+                    if (this.subscriptionQueue.length > 0) {
+                        console.log(`[MarketData] Processing ${this.subscriptionQueue.length} queued subscriptions`);
+                        this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
+                        this.subscriptionQueue = [];
+                    }
+                });
+
+                this.ws.on("tick", (tick: any) => {
+                    this.io.emit('market_data', tick);
+                });
+
+                this.ws.on("error", (err: any) => {
+                    console.error("[MarketData] WebSocket Error:", err);
+                    this.isConnected = false;
+                });
+            }
 
         } catch (err) {
             console.error("[MarketData] Failed to initialize:", err);
@@ -84,12 +94,17 @@ export class AngelOneMarketData {
         if (this.session && this.session.success) return;
 
         console.log(`[MarketData] Generating new Angel One session for ${this.account.client_id}`);
-        this.session = await loginAngelOne(
-            this.account.client_id,
-            this.account.totp_secret,
-            this.account.api_key,
-            this.account.password
-        );
+        try {
+            this.session = await loginAngelOne(
+                this.account.client_id,
+                this.account.totp_secret,
+                this.account.api_key,
+                this.account.password
+            );
+        } catch (err: any) {
+            console.error(`[MarketData] Session generation failed:`, err.message || err);
+            this.session = { success: false, message: err.message || 'Login failed' };
+        }
         return this.session;
     }
 
@@ -111,10 +126,7 @@ export class AngelOneMarketData {
 
     async getQuote(mode: 'FULL' | 'OHLC' | 'LTP', exchangeTokens: any) {
         try {
-            // Ensure we have an account and session even if initialize(userId) hasn't finished
             if (!this.account || !this.session) {
-                console.log("[MarketData] getQuote triggered before full initialization, attempting late init...");
-                // Note: We need userId for this, but if we don't have it, we use the last one
                 if (!this.userId) return { success: false, message: "User session not found" };
 
                 const { data: accounts } = await supabase
@@ -135,10 +147,7 @@ export class AngelOneMarketData {
 
             const response = await axios.post(
                 "https://apiconnect.angelone.in/rest/secure/angelbroking/market/v1/quote/",
-                {
-                    mode,
-                    exchangeTokens
-                },
+                { mode, exchangeTokens },
                 {
                     headers: {
                         "X-PrivateKey": this.account.api_key,
@@ -154,11 +163,23 @@ export class AngelOneMarketData {
                 }
             );
 
-            console.log(`[MarketData] ${mode} Quote Result status: ${response.data.status}`);
+            // SPECIAL CASE: If API Key is invalid (AG8004), clear session to force refresh next time
+            if (response.data?.errorCode === 'AG8004' || response.data?.status === false) {
+                console.warn(`[MarketData] API Error ${response.data?.errorCode}: ${response.data?.message}. Resetting session.`);
+                this.session = null;
+            }
+
             return response.data;
         } catch (err: any) {
-            console.error("[MarketData] Failed to fetch quote:", err.response?.data || err.message);
-            return { success: false, message: err.message };
+            const errorInfo = err.response?.data || { message: err.message };
+            console.error("[MarketData] Failed to fetch quote:", errorInfo);
+
+            // If it's a 401 or specific error code, clear session
+            if (errorInfo.errorCode === 'AG8004' || err.response?.status === 401) {
+                this.session = null;
+            }
+
+            return errorInfo;
         }
     }
 }
