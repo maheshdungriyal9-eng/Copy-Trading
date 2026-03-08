@@ -8,15 +8,20 @@ export class AngelOneMarketData {
     private io: Server;
     private userId: string | null = null;
     private isConnected: boolean = false;
+    private subscriptionQueue: any[] = [];
 
     constructor(io: Server) {
         this.io = io;
     }
 
     async initialize(userId: string) {
+        if (this.userId === userId && this.isConnected) {
+            console.log("Market data already initialized for this user");
+            return;
+        }
+
         this.userId = userId;
         try {
-            // Fetch user's first demat account for market data
             const { data: accounts, error } = await supabase
                 .from('demat_accounts')
                 .select('*')
@@ -30,14 +35,11 @@ export class AngelOneMarketData {
             }
 
             const account = accounts[0];
-
-            // Login to get fresh tokens
-            // In a real app, we'd manage sessions better
             const session = await loginAngelOne(
                 account.client_id,
                 account.totp_secret,
                 account.api_key,
-                account.password // Assuming password is the PIN
+                account.password
             );
 
             if (!session.success) return;
@@ -54,16 +56,21 @@ export class AngelOneMarketData {
             this.ws.on("connect", () => {
                 console.log("Angel One WebSocket Connected");
                 this.isConnected = true;
-                // Subscribe to some default symbols if needed
+                // Process queued subscriptions
+                if (this.subscriptionQueue.length > 0) {
+                    console.log(`Processing ${this.subscriptionQueue.length} queued subscriptions`);
+                    this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
+                    this.subscriptionQueue = [];
+                }
             });
 
             this.ws.on("tick", (tick: any) => {
-                // Broadcast ticks to frontend
                 this.io.emit('market_data', tick);
             });
 
             this.ws.on("error", (err: any) => {
                 console.error("Angel One WebSocket Error:", err);
+                this.isConnected = false;
             });
 
         } catch (err) {
@@ -72,13 +79,18 @@ export class AngelOneMarketData {
     }
 
     subscribe(tokens: { exchangeType: number, tokens: string[] }[]) {
-        if (this.isConnected && this.ws) {
-            this.ws.subscribe({
-                correlationId: "watchlist",
-                action: 1, // 1 for subscribe
-                mode: 1, // 1 for LTP
-                exchangeTokens: tokens
-            });
+        if (!this.isConnected || !this.ws) {
+            console.log("WebSocket not connected, queuing subscription");
+            this.subscriptionQueue.push(tokens);
+            return;
         }
+
+        console.log("Sending subscription to Angel One:", JSON.stringify(tokens));
+        this.ws.subscribe({
+            correlationId: "watchlist",
+            action: 1,
+            mode: 1,
+            exchangeTokens: tokens
+        });
     }
 }

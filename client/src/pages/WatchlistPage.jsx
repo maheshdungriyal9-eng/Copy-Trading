@@ -47,10 +47,14 @@ const WatchlistPage = () => {
         }
 
         socket.on('market_data', (data) => {
-            if (data && data.token) {
+            // Angel One WebSocketV2 uses 'tk' for token and 'ltp' for last traded price
+            const token = data.tk || data.token;
+            const ltp = data.ltp || data.last_traded_price;
+
+            if (token && ltp) {
                 setPrices(prev => ({
                     ...prev,
-                    [data.token]: data.last_traded_price / 100 // Angel One gives price in paise
+                    [token]: Number(ltp) / 100
                 }));
             }
         });
@@ -82,12 +86,22 @@ const WatchlistPage = () => {
             }
 
             setScripts(data || []);
-            // Subscribe to all tokens in the watchlist
-            const tokens = (data || []).filter(s => s.symbol_token).map(s => ({
-                exchangeType: s.exchange === 'NFO' ? 2 : 1, // 1 for NSE, 2 for NFO
-                tokens: [s.symbol_token]
-            }));
+
+            // Subscribe to all tokens in the watchlist with correct exchange types
+            const tokens = (data || []).filter(s => s.symbol_token).map(s => {
+                let exchangeType = 1; // NSE Equity
+                if (s.exchange === 'NFO') exchangeType = 2;
+                else if (s.exchange === 'BSE') exchangeType = 3;
+                else if (s.exchange === 'MCX') exchangeType = 5;
+
+                return {
+                    exchangeType,
+                    tokens: [s.symbol_token]
+                };
+            });
+
             if (tokens.length > 0) {
+                console.log('Requesting subscription for tokens:', tokens);
                 socket.emit('subscribe_symbols', tokens);
             }
         } catch (err) {
