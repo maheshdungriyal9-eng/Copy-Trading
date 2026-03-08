@@ -44,7 +44,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp, initialSide }) => {
 
             const [accRes, grpRes] = await Promise.all([
                 supabase.from('demat_accounts').select('id, nickname, broker_name').eq('user_id', user.id),
-                supabase.from('trading_groups').select('id, name').eq('user_id', user.id)
+                supabase.from('groups').select('id, group_name').eq('user_id', user.id)
             ]);
 
             if (accRes.data) setAccounts(accRes.data);
@@ -199,7 +199,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp, initialSide }) => {
                                     ))
                                 ) : (
                                     groups.map(grp => (
-                                        <option key={grp.id} value={grp.id}>{grp.name}</option>
+                                        <option key={grp.id} value={grp.id}>{grp.group_name}</option>
                                     ))
                                 )}
                             </select>
