@@ -605,7 +605,6 @@ const DematPage = () => {
                                             onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
                                             className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all text-sm"
                                             placeholder="Angel ID"
-                                            maxLength={7}
                                             required
                                         />
                                         <div className="relative group/pin">
