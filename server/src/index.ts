@@ -30,13 +30,41 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/demat/validate', async (req, res) => {
     try {
-        const { client_id, totp_secret, api_key, password } = req.body;
-        console.log(`[Demat] Validating credentials for: ${client_id}`);
+        const { client_id, totp_secret, api_key, password, mobile, email } = req.body;
+        console.log(`[Demat] Validating credentials and profile for: ${client_id}`);
 
         const result = await loginAngelOne(client_id, totp_secret, api_key, password);
 
-        if (result.success) {
-            res.json({ success: true, message: 'Credentials verified successfully' });
+        if (result.success && result.profile) {
+            // Validate Mobile (Angel One usually returns it under mobileno)
+            const profileMobile = result.profile.mobileno || '';
+            const profileEmail = result.profile.email || '';
+
+            console.log(`[Demat] Cross-verifying: Input Mobile(${mobile}) vs Profile(${profileMobile}), Input Email(${email}) vs Profile(${profileEmail})`);
+
+            // Check if mobile matches (last 10 digits to be safe)
+            const sanitizedInputMobile = mobile.replace(/\D/g, '').slice(-10);
+            const sanitizedProfileMobile = profileMobile.replace(/\D/g, '').slice(-10);
+
+            if (sanitizedInputMobile !== sanitizedProfileMobile && sanitizedProfileMobile !== '') {
+                return res.status(401).json({
+                    success: false,
+                    message: `Mobile number mismatch. Registered mobile ends with ...${sanitizedProfileMobile.slice(-4)}`
+                });
+            }
+
+            // Check if email matches (case-insensitive)
+            if (email.toLowerCase().trim() !== profileEmail.toLowerCase().trim() && profileEmail !== '') {
+                return res.status(401).json({
+                    success: false,
+                    message: `Email mismatch. Registered email is ${profileEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}`
+                });
+            }
+
+            res.json({ success: true, message: 'Credentials and Profile verified successfully' });
+        } else if (result.success) {
+            // Login passed but profile fetch failed (rare)
+            res.json({ success: true, message: 'Credentials verified (Profile check skipped)' });
         } else {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
         }

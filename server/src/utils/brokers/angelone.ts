@@ -25,12 +25,28 @@ export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey
                 throw new Error('Login succeeded but tokens are missing in the response.');
             }
 
-            return {
-                success: true,
-                access_token: sessionData.jwtToken,
-                refresh_token: sessionData.refreshToken,
-                feed_token: sessionData.feedToken
-            };
+            // CROSS-VERIFY Profile (for Email and Phone validation if provided)
+            try {
+                const profile = await smart_api.getProfile();
+                console.log('[Demat] Profile fetched for verification:', JSON.stringify(profile));
+
+                return {
+                    success: true,
+                    access_token: sessionData.jwtToken,
+                    refresh_token: sessionData.refreshToken,
+                    feed_token: sessionData.feedToken,
+                    profile: profile.data
+                };
+            } catch (profileErr) {
+                console.warn('[Demat] Login succeeded but profile fetch failed:', profileErr);
+                // We still return success because the credentials themselves (ID/PIN/TOTP) are valid
+                return {
+                    success: true,
+                    access_token: sessionData.jwtToken,
+                    refresh_token: sessionData.refreshToken,
+                    feed_token: sessionData.feedToken
+                };
+            }
         } else {
             console.error('Angel One Session Status is FALSE. Full Response:', JSON.stringify(session));
             throw new Error(session.message || 'Login failed');

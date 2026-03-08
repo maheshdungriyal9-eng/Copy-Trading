@@ -229,7 +229,9 @@ const DematPage = () => {
                     client_id: formData.client_id,
                     totp_secret: formData.totp_secret,
                     api_key: formData.api_key,
-                    password: formData.password
+                    password: formData.password,
+                    mobile: formData.mobile,
+                    email: formData.email
                 })
             });
 
