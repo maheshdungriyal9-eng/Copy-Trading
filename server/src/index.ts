@@ -50,39 +50,43 @@ app.post('/api/instruments/sync', async (req, res) => {
         await syncInstruments();
         res.json({ success: true });
     } catch (error: any) {
-        app.post('/api/market/quote', async (req, res) => {
-            try {
-                const { mode, exchangeTokens } = req.body;
-                const result = await marketDataHandler.getQuote(mode, exchangeTokens);
-                res.json(result);
-            } catch (error: any) {
-                res.status(500).json({ error: error.message });
-            }
-        });
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        io.on('connection', (socket) => {
-            console.log('A user connected:', socket.id);
+app.post('/api/market/quote', async (req, res) => {
+    try {
+        const { mode, exchangeTokens } = req.body;
+        const result = await marketDataHandler.getQuote(mode, exchangeTokens);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-            // Initialize market data for the user if they provide their userId
-            socket.on('init_market_data', async (userId: string) => {
-                console.log(`Initializing market data for user: ${userId}`);
-                await marketDataHandler.initialize(userId);
-            });
+io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
 
-            socket.on('subscribe_symbols', (tokens: any) => {
-                console.log('Subscribing to tokens:', tokens);
-                marketDataHandler.subscribe(tokens);
-            });
+    // Initialize market data for the user if they provide their userId
+    socket.on('init_market_data', async (userId: string) => {
+        console.log(`Initializing market data for user: ${userId}`);
+        await marketDataHandler.initialize(userId);
+    });
 
-            socket.on('disconnect', () => {
-                console.log('User disconnected:', socket.id);
-            });
-        });
+    socket.on('subscribe_symbols', (tokens: any) => {
+        console.log('Subscribing to tokens:', tokens);
+        marketDataHandler.subscribe(tokens);
+    });
 
-        const PORT = process.env.PORT || 5000;
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
+});
 
-        httpServer.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-            // Sync/Load instruments on startup
-            loadInstruments();
-        });
+const PORT = process.env.PORT || 5000;
+
+httpServer.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    // Sync/Load instruments on startup
+    loadInstruments();
+});
