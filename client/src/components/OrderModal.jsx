@@ -35,7 +35,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp }) => {
                 user_id: user.id,
                 variety: variety,
                 params: {
-                    tradingsymbol: script.symbol + '-EQ',
+                    tradingsymbol: script.symbol,
                     symboltoken: script.symbol_token,
                     exchange: script.exchange,
                     transactiontype: transactionType,
@@ -52,7 +52,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp }) => {
                 payload = {
                     user_id: user.id,
                     params: {
-                        tradingsymbol: script.symbol + '-EQ',
+                        tradingsymbol: script.symbol,
                         symboltoken: script.symbol_token,
                         exchange: script.exchange,
                         transactiontype: transactionType,
