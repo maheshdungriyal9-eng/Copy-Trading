@@ -117,7 +117,7 @@ const OrdersPage = () => {
                                 onClick={() => setActiveTab(tab)}
                                 className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                             >
-                                {tab === 'orders' ? 'Order Book' : 'GTT Rules'}
+                                {tab === 'orders' ? 'Regular' : 'GTT'}
                             </button>
                         ))}
                     </div>
