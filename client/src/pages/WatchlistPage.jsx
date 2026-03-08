@@ -62,40 +62,70 @@ const WatchlistPage = () => {
 
     const fetchWatchlist = async () => {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-        const { data, error } = await supabase
-            .from('watchlist')
-            .select('*')
-            .eq('user_id', user?.id)
-            .order('created_at', { ascending: false });
+            const { data, error } = await supabase
+                .from('watchlist')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
 
-        if (!error) {
+            if (error) {
+                console.error('Error fetching watchlist:', error);
+                setLoading(false);
+                return;
+            }
+
             setScripts(data || []);
             // Subscribe to all tokens in the watchlist
-            const tokens = data.filter(s => s.symbol_token).map(s => ({
+            const tokens = (data || []).filter(s => s.symbol_token).map(s => ({
                 exchangeType: s.exchange === 'NFO' ? 2 : 1, // 1 for NSE, 2 for NFO
                 tokens: [s.symbol_token]
             }));
             if (tokens.length > 0) {
                 socket.emit('subscribe_symbols', tokens);
             }
+        } catch (err) {
+            console.error('Unexpected error in fetchWatchlist:', err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleAddScript = async (symbol, exchange, token) => {
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('watchlist').insert({
-            user_id: user?.id,
-            symbol,
-            exchange,
-            symbol_token: token,
-            script_type: 'Equity'
-        });
-        setSearchQuery('');
-        fetchWatchlist();
-        setShowAddModal(false);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                alert('Please login to add scripts');
+                return;
+            }
+
+            const { error } = await supabase.from('watchlist').insert({
+                user_id: user.id,
+                symbol,
+                exchange,
+                symbol_token: token,
+                script_type: 'Equity'
+            });
+
+            if (error) {
+                console.error('Error adding script:', error);
+                alert(`Error adding script: ${error.message}`);
+                return;
+            }
+
+            setSearchQuery('');
+            await fetchWatchlist();
+            setShowAddModal(false);
+        } catch (err) {
+            console.error('Unexpected error adding script:', err);
+            alert('An unexpected error occurred. Please try again.');
+        }
     };
 
     const handleDeleteScript = async (id) => {
