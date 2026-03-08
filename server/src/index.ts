@@ -21,6 +21,7 @@ import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
 import { loginAngelOne } from './utils/brokers/angelone';
+import { supabase } from './utils/supabase';
 
 const marketDataHandler = new AngelOneMarketData(io);
 
@@ -32,6 +33,21 @@ app.post('/api/demat/validate', async (req, res) => {
     try {
         const { client_id, totp_secret, api_key, password, mobile, email } = req.body;
         console.log(`[Demat] Validating credentials and profile for: ${client_id}`);
+
+        // 1. DUPLICATE CHECK: Check if this client_id is already registered
+        const { data: existing, error: checkError } = await supabase
+            .from('demat_accounts')
+            .select('id, user_id')
+            .eq('client_id', client_id)
+            .single();
+
+        if (existing) {
+            console.warn(`[Demat] Duplicate addition blocked: ${client_id} already exists.`);
+            return res.status(400).json({
+                success: false,
+                message: `This Angel One ID (${client_id}) is already registered in the system.`
+            });
+        }
 
         const result = await loginAngelOne(client_id, totp_secret, api_key, password, true); // Strict Mode
 
