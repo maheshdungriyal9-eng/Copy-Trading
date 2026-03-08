@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const DematAccountCard = ({ acc, onDelete }) => {
+const DematAccountCard = ({ acc, onDelete, onView }) => {
     const [showMenu, setShowMenu] = useState(false);
     const [tradingEnabled, setTradingEnabled] = useState(true);
     const [mtlEnabled, setMtlEnabled] = useState(false);
@@ -81,7 +81,10 @@ const DematAccountCard = ({ acc, onDelete }) => {
                     <button className="p-1.5 bg-indigo-500/80 hover:bg-indigo-500 rounded-md text-white transition-colors">
                         <LogOut size={16} />
                     </button>
-                    <button className="p-1.5 bg-sky-500 hover:bg-sky-400 rounded-md text-white transition-colors">
+                    <button
+                        onClick={() => onView(acc)}
+                        className="p-1.5 bg-sky-500 hover:bg-sky-400 rounded-md text-white transition-colors"
+                    >
                         <Eye size={16} />
                     </button>
                 </div>
@@ -173,6 +176,8 @@ const DematPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('grid');
     const [isValidating, setIsValidating] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedAccount, setSelectedAccount] = useState(null);
     const [formData, setFormData] = useState({
         broker_name: 'angelone',
         nickname: '',
@@ -293,6 +298,103 @@ const DematPage = () => {
         }
     };
 
+    const copyToClipboard = (text, label) => {
+        navigator.clipboard.writeText(text);
+        alert(`${label} copied to clipboard!`);
+    };
+
+    const ViewDetailsModal = ({ acc, onClose }) => {
+        if (!acc) return null;
+
+        return (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+                <div className="bg-[#1a1f2e] border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border-t-4 border-t-sky-500">
+                    <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-sky-500/10 rounded-xl flex items-center justify-center">
+                                <ShieldCheck className="text-sky-400" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white leading-none">{acc.nickname || 'Account Details'}</h3>
+                                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">{acc.broker_name}</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors text-2xl">×</button>
+                    </div>
+
+                    <div className="p-8 space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Client ID</label>
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between group">
+                                    <span className="text-slate-100 font-mono text-sm">{acc.client_id}</span>
+                                    <button onClick={() => copyToClipboard(acc.client_id, 'Client ID')} className="text-slate-500 hover:text-sky-400 opacity-0 group-hover:opacity-100 transition-all">
+                                        <Monitor size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Angel Pin</label>
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between group">
+                                    <span className="text-slate-100 font-mono text-sm">****</span>
+                                    <button onClick={() => copyToClipboard(acc.password, 'PIN')} className="text-slate-500 hover:text-sky-400 opacity-0 group-hover:opacity-100 transition-all">
+                                        <Monitor size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">API Key</label>
+                            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between group">
+                                <span className="text-slate-100 font-mono text-xs break-all pr-4">{acc.api_key}</span>
+                                <button onClick={() => copyToClipboard(acc.api_key, 'API Key')} className="text-slate-500 hover:text-sky-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                                    <Monitor size={14} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TOTP Secret</label>
+                            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between group">
+                                <span className="text-slate-100 font-mono text-xs break-all pr-4">{acc.totp_secret}</span>
+                                <button onClick={() => copyToClipboard(acc.totp_secret, 'TOTP Secret')} className="text-slate-500 hover:text-sky-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                                    <Monitor size={14} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6 pt-2 border-t border-slate-800/50">
+                            <div className="flex items-center gap-3">
+                                <Search size={16} className="text-slate-500" />
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase">Mobile</p>
+                                    <p className="text-xs text-slate-200">{acc.mobile || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Search size={16} className="text-slate-500" />
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase">Email</p>
+                                    <p className="text-xs text-slate-200 truncate max-w-[120px]">{acc.email || 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-800/30 flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all text-sm font-bold"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const deleteAccount = async (id) => {
         if (window.confirm('Are you sure you want to delete this account?')) {
             const { error } = await supabase
@@ -395,7 +497,12 @@ const DematPage = () => {
             ) : filteredAccounts.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredAccounts.map((acc) => (
-                        <DematAccountCard key={acc.id} acc={acc} onDelete={deleteAccount} />
+                        <DematAccountCard
+                            key={acc.id}
+                            acc={acc}
+                            onDelete={deleteAccount}
+                            onView={(a) => { setSelectedAccount(a); setShowDetailsModal(true); }}
+                        />
                     ))}
                 </div>
             ) : (
@@ -529,6 +636,13 @@ const DematPage = () => {
                         </form>
                     </div>
                 </div>
+            )}
+            {/* Details Modal */}
+            {showDetailsModal && (
+                <ViewDetailsModal
+                    acc={selectedAccount}
+                    onClose={() => { setShowDetailsModal(false); setSelectedAccount(null); }}
+                />
             )}
         </div>
     );
