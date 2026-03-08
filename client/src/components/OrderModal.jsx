@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Info, Zap, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
+const OrderModal = ({ isOpen, onClose, script, ltp, initialSide }) => {
     const [orderType, setOrderType] = useState('MARKET'); // MARKET, LIMIT
     const [variety, setVariety] = useState('NORMAL'); // NORMAL, GTT
-    const [transactionType, setTransactionType] = useState('BUY');
+    const [transactionType, setTransactionType] = useState(initialSide || 'BUY');
     const [quantity, setQuantity] = useState('1');
     const [price, setPrice] = useState(ltp ? (ltp / 100).toFixed(2) : '0.00');
     const [triggerPrice, setTriggerPrice] = useState('');
@@ -13,15 +13,55 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
 
+    // Routing State
+    const [routingType, setRoutingType] = useState(''); // 'individual' | 'group'
+    const [targetId, setTargetId] = useState('');
+    const [accounts, setAccounts] = useState([]);
+    const [groups, setGroups] = useState([]);
+
     useEffect(() => {
         if (ltp) {
             setPrice((ltp / 100).toFixed(2));
         }
     }, [ltp]);
 
+    useEffect(() => {
+        if (initialSide) {
+            setTransactionType(initialSide);
+        }
+    }, [initialSide]);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchRoutingData();
+        }
+    }, [isOpen]);
+
+    const fetchRoutingData = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const [accRes, grpRes] = await Promise.all([
+                supabase.from('demat_accounts').select('id, nickname, broker_name').eq('user_id', user.id),
+                supabase.from('trading_groups').select('id, name').eq('user_id', user.id)
+            ]);
+
+            if (accRes.data) setAccounts(accRes.data);
+            if (grpRes.data) setGroups(grpRes.data);
+        } catch (error) {
+            console.error('Failed to fetch routing data:', error);
+        }
+    };
+
     if (!isOpen || !script) return null;
 
     const handleExecute = async () => {
+        if (!routingType || !targetId) {
+            setMessage({ type: 'error', text: 'Please select routing type and target' });
+            return;
+        }
+
         setLoading(true);
         setMessage(null);
         try {
@@ -30,28 +70,13 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
 
             const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-            let endpoint = `${API_BASE_URL}/api/orders/execute`;
-            let payload = {
-                user_id: user.id,
-                variety: variety,
-                account_id: accountId,
-                params: {
-                    tradingsymbol: script.symbol,
-                    symboltoken: script.symbol_token,
-                    exchange: script.exchange,
-                    transactiontype: transactionType,
-                    producttype: productType,
-                    quantity: quantity,
-                    duration: 'DAY',
-                    price: orderType === 'MARKET' ? '0' : price,
-                    ordertype: orderType
-                }
-            };
+            let endpoint = '';
+            let payload = {};
 
-            if (groupId) {
+            if (routingType === 'group') {
                 endpoint = `${API_BASE_URL}/api/orders/execute-group`;
                 payload = {
-                    groupId: groupId,
+                    groupId: targetId,
                     symbol: script.symbol,
                     tradingsymbol: script.symbol,
                     symboltoken: script.symbol_token,
@@ -62,20 +87,22 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
                     quantity: quantity,
                     price: orderType === 'MARKET' ? 0 : price
                 };
-            } else if (variety === 'GTT') {
-                endpoint = `${API_BASE_URL}/api/gtt/create`;
+            } else {
+                endpoint = `${API_BASE_URL}/api/orders/execute`;
                 payload = {
                     user_id: user.id,
+                    variety: variety,
+                    account_id: targetId,
                     params: {
                         tradingsymbol: script.symbol,
                         symboltoken: script.symbol_token,
                         exchange: script.exchange,
                         transactiontype: transactionType,
                         producttype: productType,
-                        price: price,
-                        qty: quantity,
-                        triggerprice: triggerPrice,
-                        disclosedqty: quantity
+                        quantity: quantity,
+                        duration: 'DAY',
+                        price: orderType === 'MARKET' ? '0' : price,
+                        ordertype: orderType
                     }
                 };
             }
@@ -89,7 +116,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
             const result = await response.json();
             if (result.status || result.success_count !== undefined) {
                 const id = result.data?.orderid || result.data?.id || (result.orderIds ? result.orderIds.join(', ') : 'OK');
-                setMessage({ type: 'success', text: `Execution Successful! ${groupId ? `Group: ${result.success_count}/${result.total_accounts}` : `ID: ${id}`}` });
+                setMessage({ type: 'success', text: `Execution Successful! ${routingType === 'group' ? `Group: ${result.success_count}/${result.total_accounts}` : `ID: ${id}`}` });
                 setTimeout(() => {
                     onClose();
                     setMessage(null);
@@ -106,9 +133,9 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
 
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden ring-1 ring-white/10 flex flex-col">
+            <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden ring-1 ring-white/10 flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className={`p-6 flex items-center justify-between ${transactionType === 'BUY' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                <div className={`p-6 flex items-center justify-between shrink-0 ${transactionType === 'BUY' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
                     <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl ${transactionType === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
                             <Zap size={20} />
@@ -123,9 +150,9 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
                     </button>
                 </div>
 
-                <div className="p-8 space-y-6">
+                <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
                     {/* Toggle Switches */}
-                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-2xl border border-slate-800">
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-2xl border border-slate-800 shrink-0">
                         <button
                             onClick={() => setTransactionType('BUY')}
                             className={`py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${transactionType === 'BUY' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
@@ -138,6 +165,45 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
                         >
                             Sell
                         </button>
+                    </div>
+
+                    {/* Routing Section */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">Order For</label>
+                            <select
+                                value={routingType}
+                                onChange={(e) => {
+                                    setRoutingType(e.target.value);
+                                    setTargetId('');
+                                }}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                            >
+                                <option value="">Select Type</option>
+                                <option value="individual">Individual</option>
+                                <option value="group">Group</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">Target Account/Group</label>
+                            <select
+                                value={targetId}
+                                disabled={!routingType}
+                                onChange={(e) => setTargetId(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none disabled:opacity-30 transition-opacity"
+                            >
+                                <option value="">Select Target</option>
+                                {routingType === 'individual' ? (
+                                    accounts.map(acc => (
+                                        <option key={acc.id} value={acc.id}>{acc.nickname} ({acc.broker_name})</option>
+                                    ))
+                                ) : (
+                                    groups.map(grp => (
+                                        <option key={grp.id} value={grp.id}>{grp.name}</option>
+                                    ))
+                                )}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -202,23 +268,23 @@ const OrderModal = ({ isOpen, onClose, script, ltp, accountId, groupId }) => {
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2 p-3 bg-slate-950/50 rounded-2xl border border-slate-800/50 text-[10px] text-slate-500">
+                    <div className="flex items-center gap-2 p-3 bg-slate-950/50 rounded-2xl border border-slate-800/50 text-[10px] text-slate-500 shrink-0">
                         <Info size={14} className="text-indigo-400 shrink-0" />
                         <p>Approx. Margin Required: <span className="text-white font-bold ml-1">₹{(Number(quantity) * Number(price)).toFixed(2)}</span></p>
                     </div>
 
                     {message && (
-                        <div className={`p-4 rounded-2xl border text-xs font-bold animate-in zoom-in-95 ${message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                        <div className={`p-4 rounded-2xl border text-xs font-bold animate-in zoom-in-95 shrink-0 ${message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                             {message.text}
                         </div>
                     )}
                 </div>
 
                 {/* Footer Action */}
-                <div className="p-8 bg-slate-950/50 border-t border-slate-800">
+                <div className="p-8 bg-slate-950/50 border-t border-slate-800 shrink-0">
                     <button
                         onClick={handleExecute}
-                        disabled={loading}
+                        disabled={loading || !routingType || !targetId}
                         className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-white font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-[0.98] disabled:opacity-50 ${transactionType === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-xl shadow-emerald-600/20' : 'bg-rose-600 hover:bg-rose-500 shadow-xl shadow-rose-600/20'}`}
                     >
                         {loading ? <Loader2 className="animate-spin" size={20} /> : (
