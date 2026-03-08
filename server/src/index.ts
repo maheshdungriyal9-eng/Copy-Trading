@@ -39,31 +39,31 @@ app.post('/api/demat/validate', async (req, res) => {
             const profileMobile = result.profile.mobileno || '';
             const profileEmail = result.profile.email || '';
 
+            console.log(`[Demat] DEBUG - Full Profile Data:`, JSON.stringify(result.profile));
             console.log(`[Demat] Cross-verifying: Input Mobile(${mobile}) vs Profile(${profileMobile}), Input Email(${email}) vs Profile(${profileEmail})`);
 
             const sanitizedInputMobile = mobile.replace(/\D/g, '').slice(-10);
             const sanitizedProfileMobile = profileMobile.replace(/\D/g, '').slice(-10);
 
             if (sanitizedInputMobile !== sanitizedProfileMobile && sanitizedProfileMobile !== '') {
-                console.warn(`[Demat] Mobile mismatch for ${client_id}`);
+                console.warn(`[Demat] FAILED: Mobile mismatch for ${client_id}`);
                 return res.status(401).json({
                     success: false,
-                    message: `Mobile number mismatch. Registered mobile ends with ...${sanitizedProfileMobile.slice(-4)}. Please use the exact mobile number registered with this Angel ID.`
+                    message: `Mobile number mismatch. Registered mobile ends with ...${sanitizedProfileMobile.slice(-4)}. Please use the exact registered mobile.`
                 });
             }
 
             if (email.toLowerCase().trim() !== profileEmail.toLowerCase().trim() && profileEmail !== '') {
-                console.warn(`[Demat] Email mismatch for ${client_id}`);
+                console.warn(`[Demat] FAILED: Email mismatch for ${client_id}`);
                 return res.status(401).json({
                     success: false,
-                    message: `Email mismatch. Registered email is ${profileEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}. Please use the exact email registered with this Angel ID.`
+                    message: `Email mismatch. Registered email is ${profileEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}. Please use the exact registered email.`
                 });
             }
 
+            console.log(`[Demat] SUCCESS: All credentials and profile details verified for ${client_id}`);
             res.json({ success: true, message: 'Credentials and Profile verified successfully' });
         } else {
-            // This part should technically be unreachable if requireProfile=true throws on failure,
-            // but we keep it for safety.
             res.status(401).json({ success: false, message: 'Profile verification failed. Please check your API Key and credentials.' });
         }
     } catch (error: any) {
