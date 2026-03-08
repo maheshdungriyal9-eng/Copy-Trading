@@ -8,9 +8,9 @@ export const loginAngelOne = async (clientId: string, totpSecret: string, apiKey
             api_key: apiKey,
         });
 
-        // Generate TOTP
+        // Generate TOTP (Sanitize secret by removing whitespace)
         const token = speakeasy.totp({
-            secret: totpSecret,
+            secret: totpSecret.replace(/\s+/g, ''),
             encoding: 'base32'
         });
 
