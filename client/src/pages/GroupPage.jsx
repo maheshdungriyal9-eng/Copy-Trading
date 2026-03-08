@@ -16,8 +16,14 @@ const GroupPage = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        const { data: groupsData } = await supabase.from('groups').select('*');
-        const { data: accountsData } = await supabase.from('demat_accounts').select('*');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        const { data: groupsData } = await supabase.from('groups').select('*').eq('user_id', user.id);
+        const { data: accountsData } = await supabase.from('demat_accounts').select('*').eq('user_id', user.id);
 
         // Fetch group-account mappings to calculate stats
         const { data: mappings } = await supabase.from('group_accounts').select('*');
@@ -40,9 +46,15 @@ const GroupPage = () => {
         e.preventDefault();
         if (!groupName || selectedAccounts.length === 0) return;
 
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            alert('Please log in again.');
+            return;
+        }
+
         const { data: newGroup, error: groupError } = await supabase
             .from('groups')
-            .insert([{ group_name: groupName }])
+            .insert([{ group_name: groupName, user_id: user.id }])
             .select()
             .single();
 
@@ -176,8 +188,8 @@ const GroupPage = () => {
                                                 key={acc.id}
                                                 onClick={() => toggleAccountSelection(acc)}
                                                 className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group ${selectedAccounts.find(a => a.id === acc.id)
-                                                        ? 'bg-indigo-600/10 border-indigo-500'
-                                                        : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800'
+                                                    ? 'bg-indigo-600/10 border-indigo-500'
+                                                    : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800'
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-3">

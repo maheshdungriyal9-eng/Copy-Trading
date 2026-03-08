@@ -29,7 +29,10 @@ const OrderManagerPage = () => {
     }, [symbol]);
 
     const fetchGroups = async () => {
-        const { data } = await supabase.from('groups').select('*');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data } = await supabase.from('groups').select('*').eq('user_id', user.id);
         setGroups(data || []);
         if (data && data.length > 0) setSelectedGroupId(data[0].id);
     };
