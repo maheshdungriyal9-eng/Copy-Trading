@@ -12,17 +12,26 @@ const OrderHistoryPage = () => {
 
     const fetchHistory = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('order_history')
-            .select(`
-                *,
-                groups (group_name),
-                demat_accounts (nickname)
-            `)
-            .order('executed_at', { ascending: false });
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
 
-        if (!error) setHistory(data || []);
-        setLoading(false);
+            const { data, error } = await supabase
+                .from('order_history')
+                .select(`
+                    *,
+                    groups (group_name),
+                    demat_accounts (nickname)
+                `)
+                .eq('user_id', user.id)
+                .order('executed_at', { ascending: false });
+
+            if (!error) setHistory(data || []);
+        } catch (err) {
+            console.error('Fetch history error:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

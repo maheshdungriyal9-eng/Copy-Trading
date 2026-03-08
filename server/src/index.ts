@@ -173,10 +173,11 @@ app.post('/api/orders/execute', async (req, res) => {
             await supabase.from('order_history').insert({
                 user_id,
                 symbol: `${params.exchange}:${params.tradingsymbol}`,
+                buy_sell: params.transactiontype,
                 quantity: parseInt(params.quantity),
                 price: parseFloat(params.price) || 0,
                 status: 'Success',
-                order_id: result.data.orderid,
+                broker_order_id: result.data.orderid,
                 executed_at: new Date().toISOString(),
                 demat_account_id: account.id
             });
@@ -212,10 +213,11 @@ app.post('/api/gtt/create', async (req, res) => {
             await supabase.from('order_history').insert({
                 user_id,
                 symbol: `${params.exchange}:${params.tradingsymbol}`,
+                buy_sell: params.transactiontype,
                 quantity: parseInt(params.qty),
                 price: parseFloat(params.price) || 0,
                 status: 'GTT Created',
-                order_id: result.data.id,
+                broker_order_id: result.data.id,
                 executed_at: new Date().toISOString(),
                 demat_account_id: account.id
             });
