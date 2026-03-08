@@ -66,7 +66,8 @@ const GroupPage = () => {
         const mappings = selectedAccounts.map(acc => ({
             group_id: newGroup.id,
             demat_account_id: acc.id,
-            multiplier: acc.multiplier || 1
+            multiplier: acc.multiplier || 1,
+            user_id: user.id
         }));
 
         const { error: mappingError } = await supabase
