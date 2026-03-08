@@ -87,6 +87,10 @@ const WatchlistPage = () => {
 
             setScripts(data || []);
 
+            if (data && data.length > 0) {
+                primeWatchlist(data);
+            }
+
             // Subscribe to all tokens in the watchlist with correct exchange types
             const tokens = (data || []).filter(s => s.symbol_token).map(s => {
                 let exchangeType = 1; // NSE Equity
@@ -108,6 +112,47 @@ const WatchlistPage = () => {
             console.error('Unexpected error in fetchWatchlist:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const primeWatchlist = async (watchlistScripts) => {
+        try {
+            const API_BASE_URL = import.meta.env.VITE_API_URL;
+            const exchangeTokens = {};
+
+            watchlistScripts.forEach(s => {
+                if (!exchangeTokens[s.exchange]) {
+                    exchangeTokens[s.exchange] = [];
+                }
+                exchangeTokens[s.exchange].push(s.symbol_token);
+            });
+
+            const response = await fetch(`${API_BASE_URL}/api/market/quote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: 'OHLC',
+                    exchangeTokens
+                })
+            });
+
+            const result = await response.json();
+            if (result.status && result.data.fetched) {
+                const initialPrices = {};
+                result.data.fetched.forEach(item => {
+                    initialPrices[item.symbolToken] = {
+                        ltp: item.ltp * 100, // Normalize to cents for the existing format if needed, but let's check WatchlistPage.jsx line 227-231
+                        o: item.open * 100,
+                        h: item.high * 100,
+                        l: item.low * 100,
+                        c: item.close * 100, // previous close
+                        tk: item.symbolToken
+                    };
+                });
+                setPrices(prev => ({ ...prev, ...initialPrices }));
+            }
+        } catch (error) {
+            console.error('Failed to prime watchlist:', error);
         }
     };
 

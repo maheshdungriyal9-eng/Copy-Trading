@@ -121,7 +121,7 @@ export class AngelOneMarketData {
             );
 
             const response = await axios.post(
-                "https://apiconnect.angelbroking.com/rest/secure/angelbroking/market/v1/quote/",
+                "https://apiconnect.angelone.in/rest/secure/angelbroking/market/v1/quote/",
                 {
                     mode,
                     exchangeTokens
