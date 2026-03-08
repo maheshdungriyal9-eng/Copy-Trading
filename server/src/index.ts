@@ -168,6 +168,20 @@ app.post('/api/orders/execute', async (req, res) => {
         if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
 
         const result = await placeOrder(session.access_token, account.api_key, { ...params, variety });
+
+        if (result.status) {
+            await supabase.from('order_history').insert({
+                user_id,
+                symbol: `${params.exchange}:${params.tradingsymbol}`,
+                quantity: parseInt(params.quantity),
+                price: parseFloat(params.price) || 0,
+                status: 'Success',
+                order_id: result.data.orderid,
+                executed_at: new Date().toISOString(),
+                demat_account_id: account.id
+            });
+        }
+
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
@@ -193,6 +207,20 @@ app.post('/api/gtt/create', async (req, res) => {
         if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
 
         const result = await createGTTRule(session.access_token, account.api_key, params);
+
+        if (result.status) {
+            await supabase.from('order_history').insert({
+                user_id,
+                symbol: `${params.exchange}:${params.tradingsymbol}`,
+                quantity: parseInt(params.qty),
+                price: parseFloat(params.price) || 0,
+                status: 'GTT Created',
+                order_id: result.data.id,
+                executed_at: new Date().toISOString(),
+                demat_account_id: account.id
+            });
+        }
+
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
