@@ -1,32 +1,51 @@
 import { supabase } from '../utils/supabase';
-import { placeAngelOneOrder } from './brokers/angelone';
+import { loginAngelOne } from './brokers/angelone';
+import { placeOrder } from './brokers/angelone_orders';
 
-// Real function to send orders to broker APIs
 const sendOrderToBroker = async (account: any, orderDetails: any) => {
-    console.log(`Executing ${orderDetails.transactionType} for ${orderDetails.symbol} on account ${account.nickname}`);
+    console.log(`[GroupOrder] Executing ${orderDetails.transactionType} for ${orderDetails.symbol} on account ${account.nickname}`);
 
-    if (account.broker_name === 'Angel One') {
-        const quantity = Math.floor(orderDetails.quantity * (account.multiplier || 1));
+    try {
+        if (account.broker_name.toLowerCase() === 'angelone') {
+            // 1. Login to get fresh session
+            const session = await loginAngelOne(
+                account.client_id,
+                account.totp_secret,
+                account.api_key,
+                account.password
+            );
 
-        // Symbol parsing for Angel One (requires token, exchange, etc.)
-        // For simplicity, we assume token is provided or we fetch it from a mapping
-        // In a production app, we'd have a symbol-to-token mapping database
+            if (!session.success) {
+                return { success: false, error: 'Authentication failed' };
+            }
 
-        return await placeAngelOneOrder(
-            account.access_token,
-            account.api_key,
-            {
-                symbol: orderDetails.symbol,
-                exchange: orderDetails.exchange || 'NSE',
-                tradingsymbol: orderDetails.symbol.split(':')[1] || orderDetails.symbol,
-                symboltoken: account.symbolToken || '14366', // Mock token for INFY
+            const multiplier = Number(account.multiplier) || 1;
+            const finalQuantity = Math.floor(Number(orderDetails.quantity) * multiplier);
+
+            // 2. Place order
+            const orderParams: any = {
+                variety: 'NORMAL',
+                tradingsymbol: orderDetails.tradingsymbol,
+                symboltoken: orderDetails.symboltoken,
                 transactiontype: orderDetails.transactionType,
-                quantity: quantity,
+                exchange: orderDetails.exchange,
                 ordertype: orderDetails.orderType,
                 producttype: orderDetails.productType,
-                price: orderDetails.price
-            }
-        );
+                duration: 'DAY',
+                price: orderDetails.price?.toString() || '0',
+                quantity: finalQuantity.toString()
+            };
+
+            const response = await placeOrder(session.access_token, account.api_key, orderParams);
+            return {
+                success: response.status === true || response.message === 'SUCCESS',
+                orderid: response.data?.orderid || response.orderid,
+                message: response.message
+            };
+        }
+    } catch (error: any) {
+        console.error(`[GroupOrder] Error for ${account.nickname}:`, error.message || error);
+        return { success: false, error: error.message || 'Placement failed' };
     }
 
     return { success: false, error: 'Unsupported broker' };
@@ -34,13 +53,10 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
 
 export const executeGroupOrder = async (groupId: string, orderDetails: any) => {
     try {
-        // 1. Fetch all accounts in the group with full credentials
+        // 1. Fetch group mappings
         const { data: mappings, error } = await supabase
             .from('group_accounts')
-            .select(`
-                multiplier,
-                demat_account_id
-            `)
+            .select('*')
             .eq('group_id', groupId);
 
         if (error) throw error;
@@ -54,38 +70,46 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any) => {
 
         if (accError) throw accError;
 
-        // 2. Execute orders in parallel
-        const executionPromises = accounts.map((acc: any) => {
-            const mapping = mappings.find(m => m.demat_account_id === acc.id);
-            const accountWithMultiplier = { ...acc, multiplier: mapping?.multiplier || 1 };
-            return sendOrderToBroker(accountWithMultiplier, orderDetails);
-        });
-
-        const results = await Promise.all(executionPromises);
+        // 2. Execute orders in sequence (to avoid rate limits or session conflicts easily, 
+        // though parallel is better for performance, sequence is safer for now)
+        const results = [];
+        for (const account of accounts) {
+            const mapping = mappings.find(m => m.demat_account_id === account.id);
+            const accountWithContext = { ...account, multiplier: mapping?.multiplier || 1 };
+            const result = await sendOrderToBroker(accountWithContext, orderDetails);
+            results.push({ account, result });
+        }
 
         // 3. Log results to order_history
-        const historyLogs = results.map((res: any, index: number) => ({
-            user_id: accounts[index].user_id,
-            group_id: groupId,
-            demat_account_id: accounts[index].id,
-            symbol: orderDetails.symbol,
-            exchange: orderDetails.exchange,
-            buy_sell: orderDetails.transactionType,
-            order_type: orderDetails.orderType,
-            price: orderDetails.price,
-            quantity: Math.floor(orderDetails.quantity * (mappings[index]?.multiplier || 1)),
-            status: res.success ? 'Success' : 'Failed',
-            broker_order_id: res.success ? (res as { orderid: string }).orderid : null
-        }));
+        const historyLogs = results.map(({ account, result }) => {
+            const mapping = mappings.find(m => m.demat_account_id === account.id);
+            const multiplier = Number(mapping?.multiplier) || 1;
+
+            return {
+                user_id: account.user_id,
+                group_id: groupId,
+                demat_account_id: account.id,
+                symbol: orderDetails.symbol,
+                exchange: orderDetails.exchange,
+                buy_sell: orderDetails.transactionType,
+                order_type: orderDetails.orderType,
+                price: orderDetails.price || 0,
+                quantity: Math.floor(Number(orderDetails.quantity) * multiplier),
+                status: result.success ? 'Success' : 'Failed',
+                broker_order_id: result.orderid || null,
+                source: 'app'
+            };
+        });
 
         await supabase.from('order_history').insert(historyLogs);
 
         return {
             total_accounts: accounts.length,
-            orderIds: results.map(r => 'orderid' in r ? r.orderid : 'FAILED')
+            success_count: results.filter(r => r.result.success).length,
+            orderIds: results.map(r => r.result.orderid || 'FAILED')
         };
     } catch (error: any) {
-        console.error('Order execution failed:', error);
+        console.error('Group Order execution failed:', error);
         throw error;
     }
 };

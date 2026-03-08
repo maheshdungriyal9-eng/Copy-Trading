@@ -17,9 +17,38 @@ const OrderManagerPage = () => {
     const [ltp, setLtp] = useState(0);
     const [loading, setLoading] = useState(false);
     const [executionLogs, setExecutionLogs] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filteredInstruments, setFilteredInstruments] = useState([]);
+    const [searching, setSearching] = useState(false);
+    const [selectedInstrument, setSelectedInstrument] = useState(null);
 
     useEffect(() => {
         fetchGroups();
+    }, []);
+
+    useEffect(() => {
+        const searchTimer = setTimeout(async () => {
+            if (searchQuery.length > 1) {
+                setSearching(true);
+                try {
+                    const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+                    const response = await fetch(`${API_BASE_URL}/api/instruments/search?query=${searchQuery}`);
+                    const data = await response.json();
+                    setFilteredInstruments(data);
+                } catch (error) {
+                    console.error('Search failed:', error);
+                } finally {
+                    setSearching(false);
+                }
+            } else {
+                setFilteredInstruments([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(searchTimer);
+    }, [searchQuery]);
+
+    useEffect(() => {
         const unsubscribe = subscribeToPrices((data) => {
             if (data.symbol === symbol) {
                 setLtp(data.price);
@@ -45,11 +74,13 @@ const OrderManagerPage = () => {
             const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
             const response = await axios.post(`${API_URL}/api/orders/execute-group`, {
                 groupId: selectedGroupId,
-                symbol,
-                exchange,
+                symbol: selectedInstrument ? selectedInstrument.symbol : symbol,
+                tradingsymbol: selectedInstrument ? selectedInstrument.symbol : symbol.split(':')[1] || symbol,
+                symboltoken: selectedInstrument ? selectedInstrument.token : '',
+                exchange: selectedInstrument ? (selectedInstrument.exch_seg === 'NFO' ? 'NFO' : selectedInstrument.exch_seg) : exchange,
                 transactionType: buySell.toUpperCase(),
                 orderType: orderType.toUpperCase(),
-                productType: product === 'MIS (Intraday)' ? 'INTRADAY' : 'DELIVERY',
+                productType: product.includes('Intraday') ? 'INTRADAY' : (product.includes('Delivery') ? 'DELIVERY' : 'CARRYFORWARD'),
                 quantity,
                 price: orderType === 'Market' ? 0 : price
             });
@@ -125,12 +156,50 @@ const OrderManagerPage = () => {
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                                         <input
                                             type="text"
-                                            value={symbol}
-                                            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                                            placeholder="E.g. NSE:RELIANCE"
+                                            value={searchQuery}
+                                            onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                if (selectedInstrument) setSelectedInstrument(null);
+                                            }}
+                                            placeholder="E.g. RELIANCE, SBIN..."
                                             className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold placeholder:text-slate-600 transition-all font-mono"
                                         />
+                                        {searching && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                <RefreshCcw size={14} className="text-indigo-400 animate-spin" />
+                                            </div>
+                                        )}
+
+                                        {filteredInstruments.length > 0 && !selectedInstrument && (
+                                            <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden z-50 shadow-2xl max-h-48 overflow-y-auto custom-scrollbar">
+                                                {filteredInstruments.map(inst => (
+                                                    <button
+                                                        key={inst.token}
+                                                        onClick={() => {
+                                                            setSelectedInstrument(inst);
+                                                            setSearchQuery(inst.symbol);
+                                                            setSymbol(inst.symbol);
+                                                            setExchange(inst.exch_seg);
+                                                            setFilteredInstruments([]);
+                                                        }}
+                                                        className="w-full px-4 py-3 text-left hover:bg-slate-800 flex items-center justify-between group border-b border-slate-800/50 last:border-0"
+                                                    >
+                                                        <div>
+                                                            <p className="text-sm font-bold text-white group-hover:text-indigo-400">{inst.symbol}</p>
+                                                            <p className="text-[10px] text-slate-500 font-bold uppercase">{inst.exch_seg} | {inst.instrumenttype}</p>
+                                                        </div>
+                                                        <span className="text-[9px] font-black text-slate-600">TOKEN: {inst.token}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
+                                    {selectedInstrument && (
+                                        <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg max-w-max">
+                                            <ShieldCheck size={12} className="text-indigo-400" />
+                                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">Verified Node: {selectedInstrument.token}</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Exchange</label>
