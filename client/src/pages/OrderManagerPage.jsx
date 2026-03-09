@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Zap, Play, Square, RefreshCcw, Search, ChevronDown, Info, AlertCircle, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabase';
-import { socket, subscribeToPrices } from '../utils/socket';
+import { socket } from '../socket';
 import axios from 'axios';
 
 const OrderManagerPage = () => {
@@ -49,13 +49,19 @@ const OrderManagerPage = () => {
     }, [searchQuery]);
 
     useEffect(() => {
-        const unsubscribe = subscribeToPrices((data) => {
-            if (data.symbol === symbol) {
-                setLtp(data.price);
+        const handleMarketData = (data) => {
+            const token = String(data.tk || data.token || data.symboltoken);
+            const targetToken = selectedInstrument?.token || '';
+
+            if (token === targetToken) {
+                const tickLtp = data.lp || data.last_traded_price || data.ltp;
+                if (tickLtp) setLtp(Number(tickLtp) / 100);
             }
-        });
-        return () => unsubscribe();
-    }, [symbol]);
+        };
+
+        socket.on('market_data', handleMarketData);
+        return () => socket.off('market_data', handleMarketData);
+    }, [selectedInstrument]);
 
     const fetchGroups = async () => {
         const { data: { user } } = await supabase.auth.getUser();
