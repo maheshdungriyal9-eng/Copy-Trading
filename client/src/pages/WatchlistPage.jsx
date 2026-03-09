@@ -123,7 +123,7 @@ const WatchlistPage = () => {
             setScripts(data || []);
 
             if (data && data.length > 0) {
-                primeWatchlist(data);
+                primeWatchlist(data, user.id);
             }
 
             // Subscribe to all tokens in the watchlist with correct exchange types
@@ -150,7 +150,7 @@ const WatchlistPage = () => {
         }
     };
 
-    const primeWatchlist = async (watchlistScripts) => {
+    const primeWatchlist = async (watchlistScripts, userId) => {
         try {
             const API_BASE_URL = import.meta.env.VITE_API_URL;
             const exchangeTokens = {};
@@ -167,7 +167,8 @@ const WatchlistPage = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     mode: 'OHLC',
-                    exchangeTokens
+                    exchangeTokens,
+                    userId
                 })
             });
 
@@ -248,7 +249,8 @@ const WatchlistPage = () => {
                     mode: 'FULL',
                     exchangeTokens: {
                         [exchange]: [script.symbol_token]
-                    }
+                    },
+                    userId: user.id
                 })
             });
             const result = await response.json();
