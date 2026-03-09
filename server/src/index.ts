@@ -26,6 +26,7 @@ import { supabase } from './utils/supabase';
 
 const marketDataHandlers = new Map<string, AngelOneMarketData>();
 const socketToUser = new Map<string, string>();
+const clientCodeToUser = new Map<string, string>(); // Map Angel One Client ID to System User ID
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
@@ -224,6 +225,13 @@ io.on('connection', (socket) => {
 
         socketToUser.set(socket.id, userId);
         await handler.initialize(userId, socket.id);
+
+        // Map clientCode for webhook routing
+        const account = handler.getAccountDetails();
+        if (account && account.client_id) {
+            console.log(`[Socket] Mapping clientCode ${account.client_id} to user ${userId}`);
+            clientCodeToUser.set(account.client_id, userId);
+        }
     });
 
     socket.on('subscribe_symbols', (tokens: any) => {
@@ -574,6 +582,34 @@ app.get('/api/demat/summary/:account_id', async (req, res) => {
         console.error('[Summary API] Error:', error.message);
         res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
+});
+
+// --- Angel One Order Postback (Webhook) Endpoint ---
+app.post('/api/webhooks/angelone', (req, res) => {
+    const orderUpdate = req.body;
+    const clientCode = orderUpdate.clientcode;
+
+    console.log(`[Webhook] Received order update for ${clientCode}:`, orderUpdate.status);
+
+    const userId = clientCodeToUser.get(clientCode);
+    if (userId) {
+        console.log(`[Webhook] Routing update to user ${userId}`);
+        io.to(userId).emit('order_update', {
+            symbol: orderUpdate.tradingsymbol,
+            status: orderUpdate.status,
+            orderstatus: orderUpdate.orderstatus,
+            orderid: orderUpdate.orderid,
+            type: orderUpdate.transactiontype,
+            quantity: orderUpdate.quantity,
+            avgPrice: orderUpdate.averageprice,
+            filled: orderUpdate.filledshares,
+            text: orderUpdate.text || ''
+        });
+    } else {
+        console.warn(`[Webhook] No active session found for clientCode ${clientCode}`);
+    }
+
+    res.status(200).send('OK');
 });
 
 const PORT = process.env.PORT || 5000;

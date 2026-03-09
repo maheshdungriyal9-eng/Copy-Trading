@@ -22,6 +22,15 @@ const WatchlistPage = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [lastTickMessage, setLastTickMessage] = useState('Waiting for data...');
     const [selectedChartScript, setSelectedChartScript] = useState(null);
+    const [toasts, setToasts] = useState([]);
+
+    const addToast = (message, type = 'info') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+    };
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -108,9 +117,21 @@ const WatchlistPage = () => {
             }
         });
 
+        socket.on('order_update', (data) => {
+            console.log('[OrderUpdate] Status Changed:', data);
+            const statusColor = data.status === 'complete' ? 'emerald' : (data.status === 'rejected' || data.status === 'cancelled' ? 'rose' : 'indigo');
+            addToast(`${data.symbol}: Order ${data.status.toUpperCase()} (${data.filled}/${data.quantity})`, statusColor);
+
+            // Refresh watchlist if status is complete
+            if (data.status === 'complete') {
+                fetchWatchlist();
+            }
+        });
+
         return () => {
             socket.off('market_data');
             socket.off('market_status');
+            socket.off('order_update');
         };
     }, []);
 
@@ -670,6 +691,31 @@ const WatchlistPage = () => {
                     onClose={() => setSelectedChartScript(null)}
                 />
             )}
+
+            {/* Notification Toasts Container */}
+            <div className="fixed bottom-8 right-8 z-[9999] flex flex-col gap-3 pointer-events-none">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className={`
+                            px-6 py-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl 
+                            flex items-center gap-4 animate-in slide-in-from-right fade-in duration-300 pointer-events-auto
+                            ${toast.type === 'emerald' ? 'border-emerald-500/30' : ''}
+                            ${toast.type === 'rose' ? 'border-rose-500/30' : ''}
+                            ${toast.type === 'indigo' ? 'border-indigo-500/30' : ''}
+                        `}
+                    >
+                        <div className={`w-2 h-2 rounded-full animate-pulse
+                            ${toast.type === 'emerald' ? 'bg-emerald-500' : ''}
+                            ${toast.type === 'rose' ? 'bg-rose-500' : ''}
+                            ${toast.type === 'indigo' ? 'bg-indigo-500' : ''}
+                        `} />
+                        <p className="text-[11px] font-black text-slate-200 uppercase tracking-widest leading-relaxed">
+                            {toast.message}
+                        </p>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };

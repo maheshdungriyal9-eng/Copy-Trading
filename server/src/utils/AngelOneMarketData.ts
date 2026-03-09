@@ -274,4 +274,8 @@ export class AngelOneMarketData {
             return { status: false, message: err.message };
         }
     }
+
+    getAccountDetails() {
+        return this.account;
+    }
 }
