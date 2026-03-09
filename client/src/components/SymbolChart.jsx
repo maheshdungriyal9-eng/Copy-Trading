@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart } from 'lightweight-charts';
+import { createChart, CandlestickSeries } from 'lightweight-charts';
 import { socket } from '../socket';
 import { supabase } from '../supabase';
 import { X, Maximize2, Minimize2, Clock } from 'lucide-react';
@@ -54,16 +54,13 @@ const SymbolChart = ({ script, onClose }) => {
                 handleScale: true,
             });
 
-            const candleSeries = chart.addSeries(
-                'Candlestick',
-                {
-                    upColor: '#10b981',
-                    downColor: '#ef4444',
-                    borderVisible: false,
-                    wickUpColor: '#10b981',
-                    wickDownColor: '#ef4444',
-                }
-            );
+            const candleSeries = chart.addSeries(CandlestickSeries, {
+                upColor: '#10b981',
+                downColor: '#ef4444',
+                borderVisible: false,
+                wickUpColor: '#10b981',
+                wickDownColor: '#ef4444',
+            });
 
             chartRef.current = chart;
             candleSeriesRef.current = candleSeries;
