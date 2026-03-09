@@ -22,6 +22,18 @@ export class AngelOneMarketData {
         this.userId = userId;
 
         try {
+            // Join user room
+            const socket = (this.io.sockets as any).get(socketId);
+            if (socket) {
+                socket.join(userId);
+                console.log(`[MarketData] Socket ${socketId} joined room ${userId}`);
+            }
+
+            if (this.isConnected && this.ws) {
+                console.log(`[MarketData] Already connected for user ${userId}.`);
+                this.io.to(userId).emit('market_status', { status: 'connected' });
+                return;
+            }
             const { data: accounts, error } = await supabase
                 .from('demat_accounts')
                 .select('*')
@@ -31,27 +43,27 @@ export class AngelOneMarketData {
 
             if (error || !accounts || accounts.length === 0) {
                 console.error('[MarketData] No Angel One account found');
-                this.io.to(socketId).emit('market_status', { status: 'error', message: 'No Angel One account' });
+                this.io.to(userId).emit('market_status', { status: 'error', message: 'No Angel One account' });
                 return;
             }
 
             this.account = accounts[0];
-            this.io.to(socketId).emit('market_status', { status: 'connecting' });
+            this.io.to(userId).emit('market_status', { status: 'connecting' });
 
             await this.ensureSession();
             if (!this.session?.success) {
-                this.io.to(socketId).emit('market_status', { status: 'error', message: 'Auth failed' });
+                this.io.to(userId).emit('market_status', { status: 'error', message: 'Auth failed' });
                 return;
             }
 
-            this.connectWebSocket(socketId);
+            this.connectWebSocket();
         } catch (err) {
             console.error("[MarketData] Failed to initialize:", err);
-            this.io.to(socketId).emit('market_status', { status: 'error' });
+            this.io.to(userId).emit('market_status', { status: 'error' });
         }
     }
 
-    private connectWebSocket(socketId: string) {
+    private connectWebSocket() {
         if (this.ws) {
             try { this.ws.close(); } catch (e) { }
         }
@@ -66,33 +78,39 @@ export class AngelOneMarketData {
         this.ws.connect();
 
         this.ws.on("connect", () => {
-            console.log(`[MarketData] WebSocket Connected for user: ${this.userId}`);
+            console.log(`[MarketData] WebSocket Connected for room: ${this.userId}`);
             this.isConnected = true;
-            this.io.to(socketId).emit('market_status', { status: 'connected' });
+            this.io.to(this.userId!).emit('market_status', { status: 'connected' });
 
             if (this.subscriptionQueue.length > 0) {
+                console.log(`[MarketData] Processing ${this.subscriptionQueue.length} queued subscriptions`);
                 this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
                 this.subscriptionQueue = [];
             }
         });
 
         this.ws.on("tick", (tick: any) => {
-            this.io.to(socketId).emit('market_data', tick);
+            // Health log: 1 in 100 ticks
+            if (Math.random() < 0.01) console.log(`[MarketData] Broadcasting tick to room ${this.userId}`);
+            this.io.to(this.userId!).emit('market_data', tick);
         });
 
         this.ws.on("error", (err: any) => {
             console.error(`[MarketData] WebSocket Error (${this.userId}):`, err);
             this.isConnected = false;
-            this.io.to(socketId).emit('market_status', { status: 'error', message: 'Stream error' });
+            this.io.to(this.userId!).emit('market_status', { status: 'error', message: 'Stream error' });
         });
 
         this.ws.on("close", () => {
-            console.log(`[MarketData] WebSocket Closed for user: ${this.userId}`);
+            console.log(`[MarketData] WebSocket Closed for room: ${this.userId}`);
             this.isConnected = false;
-            // Attempt reconnect if still initialized
             if (this.userId) {
-                console.log(`[MarketData] Reconnecting in 5s...`);
-                setTimeout(() => this.connectWebSocket(socketId), 5000);
+                console.log(`[MarketData] Reconnecting room ${this.userId} in 5s...`);
+                setTimeout(() => {
+                    if (this.userId && !this.isConnected) {
+                        this.connectWebSocket();
+                    }
+                }, 5000);
             }
         });
     }

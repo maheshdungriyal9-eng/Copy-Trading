@@ -61,12 +61,14 @@ const WatchlistPage = () => {
         });
 
         socket.on('market_data', (data) => {
-            const token = data.tk || data.token || data.symboltoken;
-            if (token) {
+            console.log('[MarketData] Received Tick:', data);
+            // Normalize token to string for consistent lookup
+            const token = String(data.tk || data.token || data.symboltoken);
+            if (token && token !== 'undefined') {
                 setPrices(prev => {
                     const current = prev[token] || {};
                     const tickLtp = data.lp || data.last_traded_price || data.ltp;
-                    const oldLtp = current.lp || current.ltp || current.last_traded_price;
+                    const oldLtp = current.ltp || current.lp || current.last_traded_price;
 
                     if (tickLtp && oldLtp && Number(tickLtp) !== Number(oldLtp)) {
                         const direction = Number(tickLtp) > Number(oldLtp) ? 'up' : 'down';
@@ -81,11 +83,12 @@ const WatchlistPage = () => {
                         [token]: {
                             ...current,
                             ...data,
-                            ltp: tickLtp || current.ltp,
-                            o: data.o || data.open || current.o,
-                            h: data.h || data.high || current.h,
-                            l: data.l || data.low || current.l,
-                            c: data.c || data.close || current.c
+                            ltp: tickLtp !== undefined ? tickLtp : current.ltp,
+                            o: data.o !== undefined ? data.o : (data.open !== undefined ? data.open : current.o),
+                            h: data.h !== undefined ? data.h : (data.high !== undefined ? data.high : current.h),
+                            l: data.l !== undefined ? data.l : (data.low !== undefined ? data.low : current.l),
+                            c: data.c !== undefined ? data.c : (data.close !== undefined ? data.close : current.c),
+                            tk: token
                         }
                     };
                 });
