@@ -62,15 +62,8 @@ const OrderManagerPage = () => {
         if (!user) return;
 
         const { data: groupsData } = await supabase.from('groups').select('*').eq('user_id', user.id);
-        const { data: mappings } = await supabase.from('group_accounts').select('*').eq('user_id', user.id);
-
-        const processedGroups = (groupsData || []).map(g => ({
-            ...g,
-            hasMaster: mappings?.some(m => m.group_id === g.id && m.account_type === 'Master')
-        }));
-
-        setGroups(processedGroups);
-        if (processedGroups.length > 0) setSelectedGroupId(processedGroups[0].id);
+        setGroups(groupsData || []);
+        if (groupsData && groupsData.length > 0) setSelectedGroupId(groupsData[0].id);
     };
 
     const handleExecute = async () => {
@@ -79,11 +72,6 @@ const OrderManagerPage = () => {
         setLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            const selectedGroup = groups.find(g => g.id === selectedGroupId);
-
-            if (!selectedGroup?.hasMaster) {
-                return alert('Cannot execute: This group has no Master account assigned.');
-            }
 
             const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
             const response = await axios.post(`${API_URL}/api/orders/execute-group`, {

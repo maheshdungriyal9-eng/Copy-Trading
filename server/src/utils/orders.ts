@@ -62,18 +62,6 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
         if (error) throw error;
         if (!mappings || mappings.length === 0) throw new Error('No accounts found in this group');
 
-        // CHECK: Only group master should be allowed to make group order
-        const masterMapping = mappings.find(m => m.account_type === 'Master');
-        const userIsMaster = mappings.some(m => m.user_id === userId && m.account_type === 'Master');
-
-        if (!masterMapping) {
-            throw new Error('This group does not have a Master account assigned. Group orders are disabled.');
-        }
-
-        if (!userIsMaster) {
-            throw new Error('Unauthorized: Only the Group Master account holder is allowed to execute group orders.');
-        }
-
         const accountIds = mappings.map(m => m.demat_account_id);
         const { data: accounts, error: accError } = await supabase
             .from('demat_accounts')
