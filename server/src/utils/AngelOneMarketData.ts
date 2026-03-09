@@ -1,8 +1,8 @@
-import { WebSocketV2 } from "smartapi-javascript";
 import { Server } from "socket.io";
 import axios from 'axios';
 import { supabase } from "./supabase";
 import { loginAngelOne } from "./brokers/angelone";
+import { SmartStream2 } from "./SmartStream2";
 
 export class AngelOneMarketData {
     private ws: any;
@@ -65,20 +65,20 @@ export class AngelOneMarketData {
 
     private connectWebSocket() {
         if (this.ws) {
-            try { this.ws.close(); } catch (e) { }
+            try { this.ws.disconnect(); } catch (e) { }
         }
 
-        this.ws = new WebSocketV2({
-            jwttoken: this.session.access_token,
-            apikey: this.account.api_key,
-            clientcode: this.account.client_id,
-            feedtype: this.session.feed_token
+        this.ws = new SmartStream2({
+            jwtToken: this.session.access_token,
+            apiKey: this.account.api_key,
+            clientCode: this.account.client_id,
+            feedToken: this.session.feed_token
         });
 
         this.ws.connect();
 
-        this.ws.on("connect", () => {
-            console.log(`[MarketData] WebSocket Connected for room: ${this.userId}`);
+        this.ws.on("connected", () => {
+            console.log(`[MarketData] SmartStream2 Connected for room: ${this.userId}`);
             this.isConnected = true;
             this.io.to(this.userId!).emit('market_status', { status: 'connected' });
 
@@ -91,18 +91,17 @@ export class AngelOneMarketData {
 
         this.ws.on("tick", (tick: any) => {
             // Health log: 1 in 100 ticks
-            if (Math.random() < 0.01) console.log(`[MarketData] Broadcasting tick to room ${this.userId}`);
+            if (Math.random() < 0.01) console.log(`[MarketData] Broadcasting tick for ${tick.tk} to room ${this.userId}`);
             this.io.to(this.userId!).emit('market_data', tick);
         });
 
         this.ws.on("error", (err: any) => {
-            console.error(`[MarketData] WebSocket Error (${this.userId}):`, err);
-            this.isConnected = false;
-            this.io.to(this.userId!).emit('market_status', { status: 'error', message: 'Stream error' });
+            console.error(`[MarketData] SmartStream2 Error (${this.userId}):`, err);
+            // Don't set isConnected=false immediately, let close handler handle it
         });
 
-        this.ws.on("close", () => {
-            console.log(`[MarketData] WebSocket Closed for room: ${this.userId}`);
+        this.ws.on("disconnected", () => {
+            console.log(`[MarketData] SmartStream2 Closed for room: ${this.userId}`);
             this.isConnected = false;
             if (this.userId) {
                 console.log(`[MarketData] Reconnecting room ${this.userId} in 5s...`);
@@ -181,27 +180,13 @@ export class AngelOneMarketData {
 
     subscribe(tokens: { exchangeType: number, tokens: string[] }[]) {
         if (!this.isConnected || !this.ws) {
-            console.log("[MarketData] WebSocket not connected, queuing subscription");
+            console.log("[MarketData] SmartStream2 not connected, queuing subscription");
             this.subscriptionQueue.push(tokens);
             return;
         }
 
-        // Convert array format to the Map format SmartAPI V2 expects
-        const exchangeTokens: any = {};
-        tokens.forEach(item => {
-            if (!exchangeTokens[item.exchangeType]) {
-                exchangeTokens[item.exchangeType] = [];
-            }
-            exchangeTokens[item.exchangeType].push(...item.tokens);
-        });
-
-        console.log("[MarketData] Subscribing with Map:", JSON.stringify(exchangeTokens));
-        this.ws.subscribe({
-            correlationId: "watchlist",
-            action: 1,
-            mode: 3,
-            exchangeTokens: exchangeTokens
-        });
+        console.log("[MarketData] Subscribing via SmartStream2 (Mode 3):", JSON.stringify(tokens));
+        this.ws.subscribe(3, tokens);
     }
 
     async getQuote(mode: 'FULL' | 'OHLC' | 'LTP', exchangeTokens: any) {

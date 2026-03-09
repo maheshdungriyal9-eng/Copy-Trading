@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "build": "tsc && ls -R dist",
+    "build": "tsc",
     "start": "node dist/index.js"
   },
   "keywords": [],
@@ -18,11 +18,13 @@
     "@types/express": "^5.0.6",
     "@types/socket.io": "^3.0.1",
     "@types/speakeasy": "^2.0.10",
+    "@types/ws": "^8.18.1",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "@types/node": "^25.3.5",
     "axios": "^1.13.6",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -31,6 +33,6 @@
     "socket.io": "^4.8.3",
     "speakeasy": "^2.0.0",
     "typescript": "^5.9.3",
-    "@types/node": "^25.3.5"
+    "ws": "^8.19.0"
   }
 }
