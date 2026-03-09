@@ -123,3 +123,98 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
         throw error;
     }
 };
+
+export const replicateMasterOrder = async (masterAccountId: string, orderDetails: any) => {
+    try {
+        console.log(`[CopyTrade] Detected master order for account: ${masterAccountId}`);
+
+        // 1. Find all groups where this account is a 'Master'
+        const { data: masterGroups, error: groupError } = await supabase
+            .from('group_accounts')
+            .select('group_id')
+            .eq('demat_account_id', masterAccountId)
+            .eq('account_type', 'Master');
+
+        if (groupError) throw groupError;
+        if (!masterGroups || masterGroups.length === 0) {
+            console.log(`[CopyTrade] Account ${masterAccountId} is not a Master in any group.`);
+            return;
+        }
+
+        const groupIds = masterGroups.map(g => g.group_id);
+
+        for (const groupId of groupIds) {
+            console.log(`[CopyTrade] Replicating order for group: ${groupId}`);
+
+            // 2. Find all 'Child' accounts in this group
+            const { data: groupMembers, error: memberError } = await supabase
+                .from('group_accounts')
+                .select('demat_account_id, multiplier')
+                .eq('group_id', groupId)
+                .eq('account_type', 'Child');
+
+            if (memberError) throw memberError;
+            if (!groupMembers || groupMembers.length === 0) {
+                console.log(`[CopyTrade] No child accounts found in group ${groupId}`);
+                continue;
+            }
+
+            const childAccountIds = groupMembers.map(m => m.demat_account_id);
+            const { data: accounts, error: accError } = await supabase
+                .from('demat_accounts')
+                .select('*')
+                .in('id', childAccountIds);
+
+            if (accError) throw accError;
+
+            // 3. Execute orders for each child account
+            const results = [];
+            for (const account of accounts) {
+                const mapping = groupMembers.find(m => m.demat_account_id === account.id);
+                const accountWithContext = { ...account, multiplier: mapping?.multiplier || 1 };
+
+                // Adapt Master order details for sendOrderToBroker
+                const childOrderDetails = {
+                    tradingsymbol: orderDetails.tradingsymbol,
+                    symboltoken: orderDetails.symboltoken,
+                    transactionType: orderDetails.transactiontype,
+                    exchange: orderDetails.exchange,
+                    orderType: orderDetails.ordertype,
+                    productType: orderDetails.producttype,
+                    quantity: orderDetails.quantity,
+                    price: orderDetails.price || orderDetails.averageprice || '0',
+                    triggerprice: orderDetails.triggerprice || '',
+                    disclosedquantity: orderDetails.disclosedquantity || ''
+                };
+
+                const result = await sendOrderToBroker(accountWithContext, childOrderDetails);
+                results.push({ account, result });
+            }
+
+            // 4. Log results
+            const historyLogs = results.map(({ account, result }) => {
+                const mapping = groupMembers.find(m => m.demat_account_id === account.id);
+                const multiplier = Number(mapping?.multiplier) || 1;
+
+                return {
+                    user_id: account.user_id,
+                    group_id: groupId,
+                    demat_account_id: account.id,
+                    symbol: orderDetails.tradingsymbol,
+                    exchange: orderDetails.exchange,
+                    buy_sell: orderDetails.transactiontype,
+                    order_type: orderDetails.ordertype,
+                    price: orderDetails.price || 0,
+                    quantity: Math.floor(Number(orderDetails.quantity) * multiplier),
+                    status: result.success ? 'Success' : 'Failed',
+                    broker_order_id: result.orderid || null,
+                    source: 'copy_trade'
+                };
+            });
+
+            await supabase.from('order_history').insert(historyLogs);
+        }
+    } catch (error: any) {
+        console.error('[CopyTrade] Replication failed:', error.message);
+    }
+};

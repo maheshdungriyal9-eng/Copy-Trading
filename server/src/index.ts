@@ -17,7 +17,7 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-import { executeGroupOrder } from './utils/orders';
+import { executeGroupOrder, replicateMasterOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments, searchScripAPI } from './utils/instruments';
 import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData, getRMS, getPositions, getHoldings, getAllHoldings, convertPosition } from './utils/brokers/angelone_orders';
@@ -706,31 +706,65 @@ app.get('/api/demat/summary/:account_id', async (req, res) => {
 });
 
 // --- Angel One Order Postback (Webhook) Endpoint ---
-app.post('/api/webhooks/angelone', (req, res) => {
-    const orderUpdate = req.body;
-    const clientCode = orderUpdate.clientcode;
+app.post('/api/webhooks/angelone', async (req, res) => {
+    try {
+        const orderUpdate = req.body;
+        const clientCode = orderUpdate.clientcode;
 
-    console.log(`[Webhook] Received order update for ${clientCode}:`, orderUpdate.status);
+        console.log(`[Webhook] Received order update for ${clientCode}: Status=${orderUpdate.status}, ID=${orderUpdate.orderid}`);
 
-    const userId = clientCodeToUser.get(clientCode);
-    if (userId) {
-        console.log(`[Webhook] Routing update to user ${userId}`);
-        io.to(userId).emit('order_update', {
-            symbol: orderUpdate.tradingsymbol,
-            status: orderUpdate.status,
-            orderstatus: orderUpdate.orderstatus,
-            orderid: orderUpdate.orderid,
-            type: orderUpdate.transactiontype,
-            quantity: orderUpdate.quantity,
-            avgPrice: orderUpdate.averageprice,
-            filled: orderUpdate.filledshares,
-            text: orderUpdate.text || ''
-        });
-    } else {
-        console.warn(`[Webhook] No active session found for clientCode ${clientCode}`);
+        // 1. Core Logic: Check for Copy Trading (External order from Master)
+        // We only replicate if:
+        // - It's a "NEW" or "OPEN" status (initial placement)
+        // - It's NOT from our own app (to avoid loops)
+        // - The client is a Master in any group
+        if (orderUpdate.status === 'ordered' || orderUpdate.status === 'open' || orderUpdate.orderstatus === 'SUBMITTED') {
+            // Check if this order was placed by our app
+            const { data: existingOrder } = await supabase
+                .from('order_history')
+                .select('id, source')
+                .eq('broker_order_id', orderUpdate.orderid)
+                .single();
+
+            if (!existingOrder || existingOrder.source !== 'app') {
+                // Potential Master order from external source (e.g., Angel One App)
+                const { data: masterAccount } = await supabase
+                    .from('demat_accounts')
+                    .select('id')
+                    .eq('client_id', clientCode)
+                    .single();
+
+                if (masterAccount) {
+                    // Trigger replication logic (async)
+                    replicateMasterOrder(masterAccount.id, orderUpdate).catch(err => {
+                        console.error(`[Webhook] Copy trading replication failed for ${clientCode}:`, err.message);
+                    });
+                }
+            }
+        }
+
+        // 2. Existing Logic: Route update to UI via Socket.io
+        const userId = clientCodeToUser.get(clientCode);
+        if (userId) {
+            console.log(`[Webhook] Routing update to user ${userId}`);
+            io.to(userId).emit('order_update', {
+                symbol: orderUpdate.tradingsymbol,
+                status: orderUpdate.status,
+                orderstatus: orderUpdate.orderstatus,
+                orderid: orderUpdate.orderid,
+                type: orderUpdate.transactiontype,
+                quantity: orderUpdate.quantity,
+                avgPrice: orderUpdate.averageprice,
+                filled: orderUpdate.filledshares,
+                text: orderUpdate.text || ''
+            });
+        }
+
+        res.status(200).send('OK');
+    } catch (error: any) {
+        console.error('[Webhook] Error:', error.message);
+        res.status(500).send('Internal Error');
     }
-
-    res.status(200).send('OK');
 });
 
 const PORT = process.env.PORT || 5000;
