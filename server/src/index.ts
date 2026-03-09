@@ -302,7 +302,28 @@ app.post('/api/orders/execute', async (req, res) => {
             };
             result = await createGTTRule(session.access_token, account.api_key, gttParams as any);
         } else {
-            result = await placeOrder(session.access_token, account.api_key, { ...params, variety });
+            const orderParams: any = {
+                variety: variety,
+                tradingsymbol: params.tradingsymbol,
+                symboltoken: params.symboltoken,
+                transactiontype: params.transactiontype,
+                exchange: params.exchange,
+                ordertype: params.ordertype,
+                producttype: params.producttype,
+                duration: params.duration || 'DAY',
+                price: params.price?.toString() || '0',
+                quantity: params.quantity?.toString(),
+                squareoff: "0",
+                stoploss: "0"
+            };
+            if (params.triggerprice && params.triggerprice !== '') {
+                orderParams.triggerprice = params.triggerprice.toString();
+            }
+            if (params.disclosedquantity && params.disclosedquantity !== '') {
+                orderParams.disclosedquantity = params.disclosedquantity.toString();
+            }
+
+            result = await placeOrder(session.access_token, account.api_key, orderParams);
         }
 
         console.log('[API] Broker Response:', JSON.stringify(result));

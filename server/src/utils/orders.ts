@@ -33,8 +33,18 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
                 producttype: orderDetails.productType,
                 duration: 'DAY',
                 price: orderDetails.price?.toString() || '0',
-                quantity: finalQuantity.toString()
+                quantity: finalQuantity.toString(),
+                squareoff: "0",
+                stoploss: "0"
             };
+
+            if (orderDetails.triggerprice && orderDetails.triggerprice !== '') {
+                orderParams.triggerprice = orderDetails.triggerprice.toString();
+            }
+
+            if (orderDetails.disclosedquantity && orderDetails.disclosedquantity !== '') {
+                orderParams.disclosedquantity = orderDetails.disclosedquantity.toString();
+            }
 
             const response = await placeOrder(session.access_token, account.api_key, orderParams);
             return {
