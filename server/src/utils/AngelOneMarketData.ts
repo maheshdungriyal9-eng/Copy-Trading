@@ -23,7 +23,7 @@ export class AngelOneMarketData {
 
         try {
             // Join user room
-            const socket = (this.io.sockets as any).get(socketId);
+            const socket = this.io.sockets.sockets.get(socketId);
             if (socket) {
                 socket.join(userId);
                 console.log(`[MarketData] Socket ${socketId} joined room ${userId}`);

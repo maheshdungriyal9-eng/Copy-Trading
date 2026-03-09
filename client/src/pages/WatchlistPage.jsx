@@ -19,6 +19,7 @@ const WatchlistPage = () => {
     const [flashes, setFlashes] = useState({});
     const [feedStatus, setFeedStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
     const [statusMessage, setStatusMessage] = useState('');
+    const [lastTickMessage, setLastTickMessage] = useState('Waiting for data...');
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -77,6 +78,10 @@ const WatchlistPage = () => {
                             setFlashes(f => ({ ...f, [token]: null }));
                         }, 500);
                     }
+
+                    // Update global last tick message
+                    const now = new Date();
+                    setLastTickMessage(`Last update: ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`);
 
                     return {
                         ...prev,
@@ -276,20 +281,25 @@ const WatchlistPage = () => {
                     <p className="text-slate-500 mt-1 font-medium font-mono text-xs uppercase tracking-widest italic">Live institutional data feed active.</p>
                 </div>
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${feedStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : feedStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'} `}></div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
-                            {feedStatus === 'connected' ? 'Live Feed Active' : feedStatus === 'connecting' ? 'Syncing Market...' : 'Feed Offline'}
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+                            <div className={`w-2 h-2 rounded-full animate-pulse ${feedStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : feedStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'} `}></div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                {feedStatus === 'connected' ? 'Live Feed Active' : feedStatus === 'connecting' ? 'Syncing Market...' : 'Feed Offline'}
+                            </span>
+                            {feedStatus === 'error' && (
+                                <button
+                                    onClick={() => socket.emit('init_market_data', user.id)}
+                                    className="ml-2 p-1 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 transition-all"
+                                    title="Retry Connection"
+                                >
+                                    <RefreshCcw size={12} />
+                                </button>
+                            )}
+                        </div>
+                        <span className="text-[9px] font-mono text-slate-600 uppercase tracking-tighter mr-2">
+                            {lastTickMessage}
                         </span>
-                        {feedStatus === 'error' && (
-                            <button
-                                onClick={() => socket.emit('init_market_data', user.id)}
-                                className="ml-2 p-1 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 transition-all"
-                                title="Retry Connection"
-                            >
-                                <RefreshCcw size={12} />
-                            </button>
-                        )}
                     </div>
                     <div className="flex items-center gap-3 w-full md:w-auto">
                         <button
