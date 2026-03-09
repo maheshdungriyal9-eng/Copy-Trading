@@ -123,6 +123,44 @@ export class AngelOneMarketData {
         }
     }
 
+    public async getHistoricalData(params: {
+        exchange: string,
+        symboltoken: string,
+        interval: string,
+        fromdate: string,
+        todate: string
+    }) {
+        await this.ensureSession();
+        if (!this.session?.success) {
+            throw new Error("Failed to establish session for historical data");
+        }
+
+        try {
+            const config = {
+                method: 'post',
+                url: 'https://apiconnect.angelone.in/rest/secure/angelbroking/historical/v1/getCandleData',
+                headers: {
+                    'X-PrivateKey': this.account.api_key,
+                    'Accept': 'application/json',
+                    'X-SourceID': 'WEB',
+                    'X-ClientLocalIP': '127.0.0.1',
+                    'X-ClientPublicIP': '127.0.0.1',
+                    'X-MACAddress': 'MAC_ADDRESS',
+                    'X-UserType': 'USER',
+                    'Authorization': `Bearer ${this.session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                data: params
+            };
+
+            const response = await axios(config);
+            return response.data;
+        } catch (err: any) {
+            console.error(`[MarketData] Historical data fetch failed:`, err.response?.data || err.message);
+            throw err;
+        }
+    }
+
     private async ensureSession() {
         if (this.session && this.session.success) return;
 

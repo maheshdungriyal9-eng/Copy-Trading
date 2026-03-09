@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Globe, ShieldCheck, MoreVertical, Search, Star, ArrowUpRight, ArrowDownRight, RefreshCcw, Trash2 } from 'lucide-react';
+import { Plus, Zap, Globe, ShieldCheck, MoreVertical, Search, Star, ArrowUpRight, ArrowDownRight, RefreshCcw, Trash2, TrendingUp } from 'lucide-react';
 import { supabase } from '../supabase';
 import { socket } from '../socket';
 import OrderModal from '../components/OrderModal';
+import SymbolChart from '../components/SymbolChart';
 
 const WatchlistPage = () => {
     const [scripts, setScripts] = useState([]);
@@ -20,6 +21,7 @@ const WatchlistPage = () => {
     const [feedStatus, setFeedStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
     const [statusMessage, setStatusMessage] = useState('');
     const [lastTickMessage, setLastTickMessage] = useState('Waiting for data...');
+    const [selectedChartScript, setSelectedChartScript] = useState(null);
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -374,6 +376,13 @@ const WatchlistPage = () => {
                                                 S
                                             </button>
                                             <button
+                                                onClick={() => setSelectedChartScript(script)}
+                                                className="w-7 h-7 flex items-center justify-center bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded transition-all"
+                                                title="View Chart"
+                                            >
+                                                <TrendingUp size={12} />
+                                            </button>
+                                            <button
                                                 onClick={() => handleDeleteScript(script.id)}
                                                 className="w-7 h-7 flex items-center justify-center bg-slate-800 text-slate-500 hover:text-rose-400 rounded transition-colors"
                                             >
@@ -649,6 +658,13 @@ const WatchlistPage = () => {
                 ltp={prices[selectedScript?.symbol_token]?.ltp}
                 initialSide={orderModalSide}
             />
+
+            {selectedChartScript && (
+                <SymbolChart
+                    script={selectedChartScript}
+                    onClose={() => setSelectedChartScript(null)}
+                />
+            )}
         </div>
     );
 };

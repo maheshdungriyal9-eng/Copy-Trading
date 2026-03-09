@@ -136,6 +136,31 @@ app.post('/api/market/quote', async (req, res) => {
     }
 });
 
+app.post('/api/market/historical', async (req, res) => {
+    try {
+        const { userId, exchange, symboltoken, interval, fromdate, todate } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+        let handler = marketDataHandlers.get(userId);
+        if (!handler) {
+            handler = new AngelOneMarketData(io);
+            marketDataHandlers.set(userId, handler);
+        }
+
+        const result = await handler.getHistoricalData({
+            exchange,
+            symboltoken,
+            interval,
+            fromdate,
+            todate
+        });
+        res.json(result);
+    } catch (error: any) {
+        console.error('[API] Historical data error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
