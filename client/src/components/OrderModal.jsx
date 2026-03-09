@@ -103,6 +103,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp, initialSide }) => {
                         quantity: quantity,
                         duration: 'DAY',
                         price: orderType === 'MARKET' ? '0' : price,
+                        triggerprice: triggerPrice,
                         ordertype: orderType
                     }
                 };

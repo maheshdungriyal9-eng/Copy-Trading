@@ -91,12 +91,14 @@ app.post('/api/demat/validate', async (req, res) => {
 
 app.post('/api/orders/execute-group', async (req, res) => {
     try {
-        const { groupId, symbol, exchange, transactionType, orderType, productType, quantity, price, userId } = req.body;
+        const { groupId, symbol, exchange, transactionType, orderType, productType, quantity, price, userId, tradingsymbol, symboltoken } = req.body;
+        console.log(`[API] Executing group order for group: ${groupId}, symbol: ${tradingsymbol}`);
         const result = await executeGroupOrder(groupId, {
-            symbol, exchange, transactionType, orderType, productType, quantity, price
+            symbol, exchange, transactionType, orderType, productType, quantity, price, tradingsymbol, symboltoken
         }, userId);
         res.json(result);
     } catch (error: any) {
+        console.error('[API] Group order execution failed:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -152,6 +154,8 @@ app.post('/api/orders/execute', async (req, res) => {
         const { user_id, params, variety = 'NORMAL', account_id } = req.body;
         if (!user_id || !params) return res.status(400).json({ success: false, message: 'Missing parameters' });
 
+        console.log(`[API] Order Request: User=${user_id}, Variety=${variety}, Symbol=${params.tradingsymbol}`);
+
         // Get demat account
         let query = supabase
             .from('demat_accounts')
@@ -173,17 +177,37 @@ app.post('/api/orders/execute', async (req, res) => {
         const session = await loginAngelOne(account.client_id, account.totp_secret, account.api_key, account.password);
         if (!session.success) return res.status(401).json({ success: false, message: 'Failed to authenticate with Angel One' });
 
-        const result = await placeOrder(session.access_token, account.api_key, { ...params, variety });
+        let result;
+        if (variety === 'GTT') {
+            console.log('[API] Routing to GTT Create');
+            // Adapt params for GTT if needed (GTT expects qty, triggerprice, etc.)
+            const gttParams = {
+                tradingsymbol: params.tradingsymbol,
+                symboltoken: params.symboltoken,
+                exchange: params.exchange,
+                transactiontype: params.transactiontype,
+                producttype: params.producttype,
+                price: params.price,
+                qty: params.quantity,
+                triggerprice: params.triggerprice || params.price, // Fallback to price if trigger missing
+                disclosedqty: params.quantity
+            };
+            result = await createGTTRule(session.access_token, account.api_key, gttParams as any);
+        } else {
+            result = await placeOrder(session.access_token, account.api_key, { ...params, variety });
+        }
 
-        if (result.status) {
+        console.log('[API] Broker Response:', JSON.stringify(result));
+
+        if (result.status || result.message === 'SUCCESS') {
             await supabase.from('order_history').insert({
                 user_id,
                 symbol: `${params.exchange}:${params.tradingsymbol}`,
                 buy_sell: params.transactiontype,
                 quantity: parseInt(params.quantity),
                 price: parseFloat(params.price) || 0,
-                status: 'Success',
-                broker_order_id: result.data.orderid,
+                status: variety === 'GTT' ? 'GTT Created' : 'Success',
+                broker_order_id: result.data?.orderid || result.data?.id || 'OK',
                 executed_at: new Date().toISOString(),
                 demat_account_id: account.id,
                 source: 'app'
@@ -192,7 +216,8 @@ app.post('/api/orders/execute', async (req, res) => {
 
         res.json(result);
     } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+        console.error('[API] Execution Error:', error);
+        res.status(500).json({ success: false, message: error.message || error.errorstack || 'Internal Server Error' });
     }
 });
 
