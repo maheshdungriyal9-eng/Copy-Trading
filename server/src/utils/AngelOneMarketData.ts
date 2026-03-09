@@ -76,6 +76,8 @@ export class AngelOneMarketData {
                 });
 
                 this.ws.on("tick", (tick: any) => {
+                    // Log first few ticks to see the structure
+                    if (Math.random() < 0.05) console.log("[MarketData] Sample Tick:", JSON.stringify(tick));
                     this.io.emit('market_data', tick);
                 });
 
@@ -115,12 +117,21 @@ export class AngelOneMarketData {
             return;
         }
 
-        console.log("[MarketData] Subscribing:", JSON.stringify(tokens));
+        // Convert array format to the Map format SmartAPI V2 expects
+        const exchangeTokens: any = {};
+        tokens.forEach(item => {
+            if (!exchangeTokens[item.exchangeType]) {
+                exchangeTokens[item.exchangeType] = [];
+            }
+            exchangeTokens[item.exchangeType].push(...item.tokens);
+        });
+
+        console.log("[MarketData] Subscribing with Map:", JSON.stringify(exchangeTokens));
         this.ws.subscribe({
             correlationId: "watchlist",
             action: 1,
             mode: 3,
-            exchangeTokens: tokens
+            exchangeTokens: exchangeTokens
         });
     }
 

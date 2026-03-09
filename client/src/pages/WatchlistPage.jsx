@@ -53,15 +53,16 @@ const WatchlistPage = () => {
         }
 
         socket.on('market_data', (data) => {
-            const token = data.tk || data.token;
+            console.log('[MarketData] Received Tick:', data);
+            const token = data.tk || data.token || data.symboltoken;
             if (token) {
                 setPrices(prev => {
                     const current = prev[token] || {};
-                    const oldLtp = current.lp || current.ltp;
-                    const newLtp = data.lp || data.ltp;
+                    const tickLtp = data.lp || data.last_traded_price || data.ltp;
+                    const oldLtp = current.lp || current.ltp || current.last_traded_price;
 
-                    if (newLtp && oldLtp && newLtp !== oldLtp) {
-                        const direction = newLtp > oldLtp ? 'up' : 'down';
+                    if (tickLtp && oldLtp && Number(tickLtp) !== Number(oldLtp)) {
+                        const direction = Number(tickLtp) > Number(oldLtp) ? 'up' : 'down';
                         setFlashes(f => ({ ...f, [token]: direction }));
                         setTimeout(() => {
                             setFlashes(f => ({ ...f, [token]: null }));
@@ -73,9 +74,11 @@ const WatchlistPage = () => {
                         [token]: {
                             ...current,
                             ...data,
-                            // Ensure both are present for compatibility
-                            ltp: data.lp || data.ltp || current.ltp,
-                            lp: data.lp || data.ltp || current.lp
+                            ltp: tickLtp || current.ltp,
+                            o: data.o || data.open || current.o,
+                            h: data.h || data.high || current.h,
+                            l: data.l || data.low || current.l,
+                            c: data.c || data.close || current.c
                         }
                     };
                 });
