@@ -91,10 +91,10 @@ app.post('/api/demat/validate', async (req, res) => {
 
 app.post('/api/orders/execute-group', async (req, res) => {
     try {
-        const { groupId, symbol, exchange, transactionType, orderType, productType, quantity, price } = req.body;
+        const { groupId, symbol, exchange, transactionType, orderType, productType, quantity, price, userId } = req.body;
         const result = await executeGroupOrder(groupId, {
             symbol, exchange, transactionType, orderType, productType, quantity, price
-        });
+        }, userId);
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });

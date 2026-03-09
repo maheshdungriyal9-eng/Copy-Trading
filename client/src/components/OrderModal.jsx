@@ -76,6 +76,7 @@ const OrderModal = ({ isOpen, onClose, script, ltp, initialSide }) => {
             if (routingType === 'group') {
                 endpoint = `${API_BASE_URL}/api/orders/execute-group`;
                 payload = {
+                    userId: user.id,
                     groupId: targetId,
                     symbol: script.symbol,
                     tradingsymbol: script.symbol,

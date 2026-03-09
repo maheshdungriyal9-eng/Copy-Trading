@@ -51,9 +51,9 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
     return { success: false, error: 'Unsupported broker' };
 };
 
-export const executeGroupOrder = async (groupId: string, orderDetails: any) => {
+export const executeGroupOrder = async (groupId: string, orderDetails: any, userId: string) => {
     try {
-        // 1. Fetch group mappings
+        // 1. Fetch group mappings and check for Master account
         const { data: mappings, error } = await supabase
             .from('group_accounts')
             .select('*')
@@ -61,6 +61,18 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any) => {
 
         if (error) throw error;
         if (!mappings || mappings.length === 0) throw new Error('No accounts found in this group');
+
+        // CHECK: Only group master should be allowed to make group order
+        const masterMapping = mappings.find(m => m.account_type === 'Master');
+        const userIsMaster = mappings.some(m => m.user_id === userId && m.account_type === 'Master');
+
+        if (!masterMapping) {
+            throw new Error('This group does not have a Master account assigned. Group orders are disabled.');
+        }
+
+        if (!userIsMaster) {
+            throw new Error('Unauthorized: Only the Group Master account holder is allowed to execute group orders.');
+        }
 
         const accountIds = mappings.map(m => m.demat_account_id);
         const { data: accounts, error: accError } = await supabase
