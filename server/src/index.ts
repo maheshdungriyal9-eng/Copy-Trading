@@ -24,7 +24,8 @@ import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, c
 import { loginAngelOne } from './utils/brokers/angelone';
 import { supabase } from './utils/supabase';
 
-const marketDataHandler = new AngelOneMarketData(io);
+const marketDataHandlers = new Map<string, AngelOneMarketData>();
+const socketToUser = new Map<string, string>();
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
@@ -120,8 +121,15 @@ app.post('/api/instruments/sync', async (req, res) => {
 
 app.post('/api/market/quote', async (req, res) => {
     try {
-        const { mode, exchangeTokens } = req.body;
-        const result = await marketDataHandler.getQuote(mode, exchangeTokens);
+        const { mode, exchangeTokens, userId } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+        let handler = marketDataHandlers.get(userId);
+        if (!handler) {
+            handler = new AngelOneMarketData(io);
+            marketDataHandlers.set(userId, handler);
+        }
+        const result = await handler.getQuote(mode, exchangeTokens);
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -131,19 +139,37 @@ app.post('/api/market/quote', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    // Initialize market data for the user if they provide their userId
     socket.on('init_market_data', async (userId: string) => {
-        console.log(`Initializing market data for user: ${userId}`);
-        await marketDataHandler.initialize(userId);
+        console.log(`[Socket] Initializing market data for user: ${userId}`);
+
+        let handler = marketDataHandlers.get(userId);
+        if (!handler) {
+            handler = new AngelOneMarketData(io);
+            marketDataHandlers.set(userId, handler);
+        }
+
+        socketToUser.set(socket.id, userId);
+        await handler.initialize(userId, socket.id);
     });
 
     socket.on('subscribe_symbols', (tokens: any) => {
-        console.log('Subscribing to tokens:', tokens);
-        marketDataHandler.subscribe(tokens);
+        const userId = socketToUser.get(socket.id);
+        if (userId) {
+            const handler = marketDataHandlers.get(userId);
+            if (handler) {
+                console.log(`[Socket] Subscribing for user: ${userId}`);
+                handler.subscribe(tokens);
+            }
+        }
     });
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        const userId = socketToUser.get(socket.id);
+        if (userId) {
+            socketToUser.delete(socket.id);
+            // Optional: Cleanup handler if no more sockets for this user
+        }
     });
 });
 

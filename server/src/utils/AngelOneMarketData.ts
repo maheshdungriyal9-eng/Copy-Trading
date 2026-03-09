@@ -17,9 +17,8 @@ export class AngelOneMarketData {
         this.io = io;
     }
 
-    async initialize(userId: string) {
-        // Even if userId is same, we might want to refresh account data if they updated it
-        console.log(`[MarketData] Initializing for user: ${userId}`);
+    async initialize(userId: string, socketId: string) {
+        console.log(`[MarketData] Initializing for user: ${userId}, socket: ${socketId}`);
         this.userId = userId;
 
         try {
@@ -32,63 +31,77 @@ export class AngelOneMarketData {
 
             if (error || !accounts || accounts.length === 0) {
                 console.error('[MarketData] No Angel One account found');
+                this.io.to(socketId).emit('market_status', { status: 'error', message: 'No Angel One account' });
                 return;
             }
 
-            // Check if account has changed (API Key, etc.)
-            const newAccount = accounts[0];
-            if (this.account && (this.account.api_key !== newAccount.api_key || this.account.client_id !== newAccount.client_id)) {
-                console.log(`[MarketData] Account credentials changed, clearing session...`);
-                this.session = null;
-                this.isConnected = false;
-            }
+            this.account = accounts[0];
+            this.io.to(socketId).emit('market_status', { status: 'connecting' });
 
-            this.account = newAccount;
             await this.ensureSession();
-
-            if (!this.session?.success) return;
-
-            // Only reconnect if not already connected or account changed
-            if (this.ws && this.isConnected) {
-                console.log("[MarketData] WebSocket already connected and account unchanged.");
-            } else {
-                if (this.ws) {
-                    try { this.ws.close(); } catch (e) { }
-                }
-
-                this.ws = new WebSocketV2({
-                    jwttoken: this.session.access_token,
-                    apikey: this.account.api_key,
-                    clientcode: this.account.client_id,
-                    feedtype: this.session.feed_token
-                });
-
-                this.ws.connect();
-
-                this.ws.on("connect", () => {
-                    console.log("[MarketData] WebSocket Connected");
-                    this.isConnected = true;
-                    if (this.subscriptionQueue.length > 0) {
-                        console.log(`[MarketData] Processing ${this.subscriptionQueue.length} queued subscriptions`);
-                        this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
-                        this.subscriptionQueue = [];
-                    }
-                });
-
-                this.ws.on("tick", (tick: any) => {
-                    // Log first few ticks to see the structure
-                    if (Math.random() < 0.05) console.log("[MarketData] Sample Tick:", JSON.stringify(tick));
-                    this.io.emit('market_data', tick);
-                });
-
-                this.ws.on("error", (err: any) => {
-                    console.error("[MarketData] WebSocket Error:", err);
-                    this.isConnected = false;
-                });
+            if (!this.session?.success) {
+                this.io.to(socketId).emit('market_status', { status: 'error', message: 'Auth failed' });
+                return;
             }
 
+            this.connectWebSocket(socketId);
         } catch (err) {
             console.error("[MarketData] Failed to initialize:", err);
+            this.io.to(socketId).emit('market_status', { status: 'error' });
+        }
+    }
+
+    private connectWebSocket(socketId: string) {
+        if (this.ws) {
+            try { this.ws.close(); } catch (e) { }
+        }
+
+        this.ws = new WebSocketV2({
+            jwttoken: this.session.access_token,
+            apikey: this.account.api_key,
+            clientcode: this.account.client_id,
+            feedtype: this.session.feed_token
+        });
+
+        this.ws.connect();
+
+        this.ws.on("connect", () => {
+            console.log(`[MarketData] WebSocket Connected for user: ${this.userId}`);
+            this.isConnected = true;
+            this.io.to(socketId).emit('market_status', { status: 'connected' });
+
+            if (this.subscriptionQueue.length > 0) {
+                this.subscriptionQueue.forEach(tokens => this.subscribe(tokens));
+                this.subscriptionQueue = [];
+            }
+        });
+
+        this.ws.on("tick", (tick: any) => {
+            this.io.to(socketId).emit('market_data', tick);
+        });
+
+        this.ws.on("error", (err: any) => {
+            console.error(`[MarketData] WebSocket Error (${this.userId}):`, err);
+            this.isConnected = false;
+            this.io.to(socketId).emit('market_status', { status: 'error', message: 'Stream error' });
+        });
+
+        this.ws.on("close", () => {
+            console.log(`[MarketData] WebSocket Closed for user: ${this.userId}`);
+            this.isConnected = false;
+            // Attempt reconnect if still initialized
+            if (this.userId) {
+                console.log(`[MarketData] Reconnecting in 5s...`);
+                setTimeout(() => this.connectWebSocket(socketId), 5000);
+            }
+        });
+    }
+
+    public disconnect() {
+        this.userId = null;
+        if (this.ws) {
+            try { this.ws.close(); } catch (e) { }
+            this.ws = null;
         }
     }
 

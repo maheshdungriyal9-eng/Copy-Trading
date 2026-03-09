@@ -17,6 +17,8 @@ const WatchlistPage = () => {
     const [orderModalSide, setOrderModalSide] = useState('BUY');
     const [lastTickTimes, setLastTickTimes] = useState({});
     const [flashes, setFlashes] = useState({});
+    const [feedStatus, setFeedStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
+    const [statusMessage, setStatusMessage] = useState('');
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -42,18 +44,23 @@ const WatchlistPage = () => {
 
     useEffect(() => {
         fetchWatchlist();
-        setupSocket();
-    }, []);
 
+        const initializeSocket = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                socket.emit('init_market_data', user.id);
+            }
+        };
 
-    const setupSocket = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            socket.emit('init_market_data', user.id);
-        }
+        initializeSocket();
+
+        socket.on('market_status', (data) => {
+            console.log('[MarketStatus] Update:', data);
+            setFeedStatus(data.status);
+            if (data.message) setStatusMessage(data.message);
+        });
 
         socket.on('market_data', (data) => {
-            console.log('[MarketData] Received Tick:', data);
             const token = data.tk || data.token || data.symboltoken;
             if (token) {
                 setPrices(prev => {
@@ -88,8 +95,9 @@ const WatchlistPage = () => {
 
         return () => {
             socket.off('market_data');
+            socket.off('market_status');
         };
-    };
+    }, []);
 
     const fetchWatchlist = async () => {
         setLoading(true);
@@ -262,20 +270,38 @@ const WatchlistPage = () => {
                     <h1 className="text-3xl font-bold text-white uppercase tracking-tight">Market Analytics</h1>
                     <p className="text-slate-500 mt-1 font-medium font-mono text-xs uppercase tracking-widest italic">Live institutional data feed active.</p>
                 </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <button
-                        onClick={fetchWatchlist}
-                        className="p-2.5 bg-slate-900 border border-slate-800 text-slate-500 hover:text-indigo-400 rounded-xl transition-all"
-                    >
-                        <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-600/20 active:scale-95 whitespace-nowrap"
-                    >
-                        <Plus size={18} />
-                        Add Scripts
-                    </button>
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${feedStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : feedStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'} `}></div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                            {feedStatus === 'connected' ? 'Live Feed Active' : feedStatus === 'connecting' ? 'Syncing Market...' : 'Feed Offline'}
+                        </span>
+                        {feedStatus === 'error' && (
+                            <button
+                                onClick={() => socket.emit('init_market_data', user.id)}
+                                className="ml-2 p-1 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 transition-all"
+                                title="Retry Connection"
+                            >
+                                <RefreshCcw size={12} />
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <button
+                            onClick={fetchWatchlist}
+                            className="p-2.5 bg-slate-900 border border-slate-800 text-slate-500 hover:text-indigo-400 rounded-xl transition-all shadow-xl hover:shadow-indigo-500/10 active:scale-95"
+                            title="Refresh Base Prices"
+                        >
+                            <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-600/20 active:scale-95 whitespace-nowrap"
+                        >
+                            <Plus size={18} />
+                            Add Scripts
+                        </button>
+                    </div>
                 </div>
             </header>
 
