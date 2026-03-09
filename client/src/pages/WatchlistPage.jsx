@@ -15,6 +15,8 @@ const WatchlistPage = () => {
     const [searching, setSearching] = useState(false);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
     const [orderModalSide, setOrderModalSide] = useState('BUY');
+    const [lastTickTimes, setLastTickTimes] = useState({});
+    const [flashes, setFlashes] = useState({});
 
     useEffect(() => {
         const searchTimer = setTimeout(async () => {
@@ -51,16 +53,33 @@ const WatchlistPage = () => {
         }
 
         socket.on('market_data', (data) => {
-            console.log('[Socket] Tick received:', data);
             const token = data.tk || data.token;
             if (token) {
-                setPrices(prev => ({
-                    ...prev,
-                    [token]: {
-                        ...prev[token],
-                        ...data
+                setPrices(prev => {
+                    const current = prev[token] || {};
+                    const oldLtp = current.lp || current.ltp;
+                    const newLtp = data.lp || data.ltp;
+
+                    if (newLtp && oldLtp && newLtp !== oldLtp) {
+                        const direction = newLtp > oldLtp ? 'up' : 'down';
+                        setFlashes(f => ({ ...f, [token]: direction }));
+                        setTimeout(() => {
+                            setFlashes(f => ({ ...f, [token]: null }));
+                        }, 500);
                     }
-                }));
+
+                    return {
+                        ...prev,
+                        [token]: {
+                            ...current,
+                            ...data,
+                            // Ensure both are present for compatibility
+                            ltp: data.lp || data.ltp || current.ltp,
+                            lp: data.lp || data.ltp || current.lp
+                        }
+                    };
+                });
+                setLastTickTimes(prev => ({ ...prev, [token]: Date.now() }));
             }
         });
 
@@ -287,7 +306,7 @@ const WatchlistPage = () => {
                             const isPositive = change >= 0;
 
                             return (
-                                <tr key={script.id} className="hover:bg-indigo-500/[0.03] transition-all group border-l-2 border-transparent hover:border-indigo-500">
+                                <tr key={script.id} className={`hover:bg-indigo-500/[0.03] transition-all group border-l-2 border-transparent hover:border-indigo-500 ${flashes[script.symbol_token] === 'up' ? 'bg-emerald-500/5' : flashes[script.symbol_token] === 'down' ? 'bg-rose-500/5' : ''}`}>
                                     <td className="px-6 py-3">
                                         <div className="flex items-center justify-center gap-1.5">
                                             <button
@@ -296,7 +315,7 @@ const WatchlistPage = () => {
                                                     setOrderModalSide('BUY');
                                                     setIsOrderModalOpen(true);
                                                 }}
-                                                className="w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform"
+                                                className={`w-7 h-7 flex items-center justify-center bg-emerald-600/90 text-white rounded text-[10px] font-black shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform ${flashes[script.symbol_token] === 'up' ? 'scale-110' : ''}`}
                                             >
                                                 B
                                             </button>
