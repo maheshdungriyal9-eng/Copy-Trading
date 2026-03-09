@@ -54,13 +54,16 @@ const SymbolChart = ({ script, onClose }) => {
                 handleScale: true,
             });
 
-            const candleSeries = chart.addCandlestickSeries({
-                upColor: '#10b981',
-                downColor: '#ef4444',
-                borderVisible: false,
-                wickUpColor: '#10b981',
-                wickDownColor: '#ef4444',
-            });
+            const candleSeries = chart.addSeries(
+                'Candlestick',
+                {
+                    upColor: '#10b981',
+                    downColor: '#ef4444',
+                    borderVisible: false,
+                    wickUpColor: '#10b981',
+                    wickDownColor: '#ef4444',
+                }
+            );
 
             chartRef.current = chart;
             candleSeriesRef.current = candleSeries;
