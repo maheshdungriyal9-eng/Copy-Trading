@@ -179,3 +179,39 @@ export const getPositions = async (accessToken: string, apiKey: string) => {
         throw error.response?.data || error;
     }
 };
+
+export const getHoldings = async (accessToken: string, apiKey: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/portfolio/v1/getHolding`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get Holdings Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
+export const getAllHoldings = async (accessToken: string, apiKey: string) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rest/secure/angelbroking/portfolio/v1/getAllHolding`, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Get All Holdings Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
+export const convertPosition = async (accessToken: string, apiKey: string, params: any) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rest/secure/angelbroking/order/v1/convertPosition`, params, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Convert Position Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};

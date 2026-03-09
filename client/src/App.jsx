@@ -14,6 +14,7 @@ import OrdersPage from './pages/OrdersPage'
 import ProfilePage from './pages/ProfilePage'
 import ActivityLogsPage from './pages/ActivityLogsPage'
 import AuthPage from './pages/AuthPage'
+import PortfolioPage from './pages/PortfolioPage'
 
 const ProtectedRoute = ({ children, session }) => {
     if (!session) {
@@ -69,6 +70,7 @@ function App() {
                                         <Route path="/watchlist" element={<WatchlistPage />} />
                                         <Route path="/group" element={<GroupPage />} />
                                         <Route path="/orders" element={<OrdersPage />} />
+                                        <Route path="/portfolio" element={<PortfolioPage />} />
                                         <Route path="/order-history" element={<OrderHistoryPage />} />
                                         <Route path="/wallet" element={<WalletPage />} />
                                         <Route path="/activity-logs" element={<ActivityLogsPage />} />

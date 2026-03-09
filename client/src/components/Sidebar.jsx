@@ -24,6 +24,7 @@ const Sidebar = () => {
         { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
         { name: 'Demat', icon: ShieldCheck, path: '/demat' },
         { name: 'Watch List', icon: Search, path: '/watchlist' },
+        { name: 'Portfolio', icon: Wallet, path: '/portfolio' },
         { name: 'Orders & GTT', icon: ListTodo, path: '/orders' },
         { name: 'Order History', icon: History, path: '/order-history' },
         { name: 'Group Manager', icon: Users, path: '/group' },
