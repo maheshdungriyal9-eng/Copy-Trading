@@ -160,7 +160,7 @@ export class AngelOneMarketData {
         }
     }
 
-    private async ensureSession() {
+    public async ensureSession() {
         if (this.session && this.session.success) return;
 
         console.log(`[MarketData] Generating new Angel One session for ${this.account.client_id}`);
@@ -245,6 +245,33 @@ export class AngelOneMarketData {
             }
 
             return errorInfo;
+        }
+    }
+
+    async getLtpData(exchange: string, tradingsymbol: string, symboltoken: string) {
+        try {
+            await this.ensureSession();
+            const response = await axios.post(
+                "https://apiconnect.angelone.in/order-service/rest/secure/angelbroking/order/v1/getLtpData",
+                { exchange, tradingsymbol, symboltoken },
+                {
+                    headers: {
+                        "X-PrivateKey": this.account.api_key,
+                        "Accept": "application/json",
+                        "X-SourceID": "WEB",
+                        "X-ClientLocalIP": "127.0.0.1",
+                        "X-ClientPublicIP": "127.0.0.1",
+                        "X-MACAddress": "00-00-00-00-00-00",
+                        "X-UserType": "USER",
+                        "Authorization": `Bearer ${this.session.access_token}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+            return response.data;
+        } catch (err: any) {
+            console.error("[MarketData] getLtpData failed:", err.message);
+            return { status: false, message: err.message };
         }
     }
 }

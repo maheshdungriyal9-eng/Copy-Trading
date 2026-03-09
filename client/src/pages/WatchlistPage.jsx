@@ -28,8 +28,13 @@ const WatchlistPage = () => {
             if (searchQuery.length > 1) {
                 setSearching(true);
                 try {
+                    const { data: { user } } = await supabase.auth.getUser();
                     const API_BASE_URL = import.meta.env.VITE_API_URL;
-                    const response = await fetch(`${API_BASE_URL}/api/instruments/search?query=${searchQuery}`);
+                    const url = new URL(`${API_BASE_URL}/api/instruments/search`);
+                    url.searchParams.append('query', searchQuery);
+                    if (user) url.searchParams.append('userId', user.id);
+
+                    const response = await fetch(url.toString());
                     const data = await response.json();
                     setFilteredInstruments(data);
                 } catch (error) {

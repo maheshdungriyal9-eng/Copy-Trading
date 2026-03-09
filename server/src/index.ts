@@ -19,7 +19,7 @@ app.use(express.json());
 
 import { executeGroupOrder } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
-import { syncInstruments, loadInstruments, searchInstruments } from './utils/instruments';
+import { syncInstruments, loadInstruments, searchInstruments, searchScripAPI } from './utils/instruments';
 import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData, getRMS, getPositions } from './utils/brokers/angelone_orders';
 import { loginAngelOne } from './utils/brokers/angelone';
 import { supabase } from './utils/supabase';
@@ -104,8 +104,57 @@ app.post('/api/orders/execute-group', async (req, res) => {
     }
 });
 
-app.get('/api/instruments/search', (req, res) => {
-    const { query } = req.query;
+app.get('/api/instruments/search', async (req, res) => {
+    const { query, userId } = req.query;
+
+    // If userId is provided, try Angel One's searchScrip API for better performance and relevance
+    if (userId) {
+        try {
+            const { data: accounts } = await supabase
+                .from('demat_accounts')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('broker_name', 'angelone')
+                .limit(1);
+
+            if (accounts && accounts.length > 0) {
+                const account = accounts[0];
+                const handler = marketDataHandlers.get(userId as string);
+
+                if (handler) {
+                    const session = await (handler as any).ensureSession();
+                    if (session && session.success) {
+                        // Search across major exchanges
+                        const exchanges = ['NSE', 'BSE', 'NFO', 'MCX'];
+                        const results = await Promise.all(
+                            exchanges.map(ex => searchScripAPI(ex, query as string, account.api_key, session.access_token))
+                        );
+
+                        // Flatten and format results to match Instrument interface
+                        const flattened = results.flat().map(inst => ({
+                            token: inst.symboltoken,
+                            symbol: inst.tradingsymbol,
+                            name: inst.tradingsymbol, // API returns tradingsymbol, use it for name too
+                            expiry: '',
+                            strike: '',
+                            lotsize: '1',
+                            instrumenttype: '',
+                            exch_seg: inst.exchange,
+                            tick_size: ''
+                        }));
+
+                        if (flattened.length > 0) {
+                            return res.json(flattened);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[Search] API Search failed, falling back to local:', error);
+        }
+    }
+
+    // Fallback to local instrument search
     const instruments = searchInstruments(query as string);
     res.json(instruments);
 });

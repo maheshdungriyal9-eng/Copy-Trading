@@ -75,3 +75,36 @@ export const searchInstruments = (query: string, limit = 10) => {
         )
         .slice(0, limit);
 };
+
+export const searchScripAPI = async (exchange: string, query: string, apiKey: string, accessToken: string) => {
+    try {
+        const response = await axios.post(
+            'https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/searchScrip',
+            {
+                exchange: exchange,
+                searchscrip: query
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-UserType': 'USER',
+                    'X-SourceID': 'WEB',
+                    'X-ClientLocalIP': '127.0.0.1',
+                    'X-ClientPublicIP': '127.0.0.1',
+                    'X-MACAddress': '00-00-00-00-00-00',
+                    'X-PrivateKey': apiKey,
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            }
+        );
+
+        if (response.data && response.data.status) {
+            return response.data.data;
+        }
+        return [];
+    } catch (error: any) {
+        console.error('Scrip search API failed:', error.message);
+        return [];
+    }
+};
