@@ -136,7 +136,8 @@ export class SmartStream2 extends EventEmitter {
                 ts: Number(timestamp)
             };
 
-            if (mode >= 2 && buffer.length >= 123) { // Quote or SnapQuote
+            // Size checks based on Angel One proto specifications
+            if (mode >= 2 && buffer.length >= 123) { // Quote
                 tick.ltq = Number(buffer.readBigInt64LE(51));
                 tick.atp = Number(buffer.readBigInt64LE(59));
                 tick.v = Number(buffer.readBigInt64LE(67));
@@ -160,7 +161,10 @@ export class SmartStream2 extends EventEmitter {
 
             this.emit('tick', tick);
         } catch (e: any) {
-            console.error('[SmartStream2] Binary parsing failed:', e.message, 'Buffer length:', buffer.length);
+            // Log only if it's not a common out-of-bounds due to packet fragmentation
+            if (!e.message.includes('out of range') && !e.message.includes('outside buffer bounds')) {
+                console.error('[SmartStream2] Binary parsing error:', e.message, 'Buffer length:', buffer.length);
+            }
         }
     }
 

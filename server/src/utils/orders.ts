@@ -27,31 +27,49 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
             const multiplier = Number(account.multiplier) || 1;
             const finalQuantity = Math.floor(Number(orderDetails.quantity) * multiplier);
 
+            const getVal = (obj: any, keys: string[]) => {
+                for (const key of keys) {
+                    if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+                    const lowerKey = key.toLowerCase();
+                    if (obj[lowerKey] !== undefined && obj[lowerKey] !== null) return obj[lowerKey];
+                    const camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+                    if (obj[camelKey] !== undefined && obj[camelKey] !== null) return obj[camelKey];
+                }
+                return undefined;
+            };
+
             // 2. Place order
             const orderParams: any = {
-                variety: orderDetails.variety || 'NORMAL',
-                tradingsymbol: orderDetails.tradingsymbol,
-                symboltoken: orderDetails.symboltoken,
-                transactiontype: orderDetails.transactionType,
-                exchange: orderDetails.exchange,
-                ordertype: orderDetails.orderType,
-                producttype: mapProductType(orderDetails.productType),
-                duration: orderDetails.duration || 'DAY',
-                price: orderDetails.price?.toString() || '0',
+                variety: getVal(orderDetails, ['variety']) || 'NORMAL',
+                tradingsymbol: getVal(orderDetails, ['tradingsymbol', 'tradingSymbol']),
+                symboltoken: getVal(orderDetails, ['symboltoken', 'symbolToken']),
+                transactiontype: getVal(orderDetails, ['transactiontype', 'transactionType']),
+                exchange: getVal(orderDetails, ['exchange']),
+                ordertype: getVal(orderDetails, ['ordertype', 'orderType']),
+                producttype: mapProductType(getVal(orderDetails, ['producttype', 'productType'])),
+                duration: getVal(orderDetails, ['duration']) || 'DAY',
+                price: getVal(orderDetails, ['price', 'averageprice'])?.toString() || '0',
                 quantity: finalQuantity.toString(),
                 squareoff: "0",
                 stoploss: "0"
             };
 
-            if (orderDetails.triggerprice && orderDetails.triggerprice !== '') {
-                orderParams.triggerprice = orderDetails.triggerprice.toString();
+            const triggerPrice = getVal(orderDetails, ['triggerprice', 'triggerPrice']);
+            if (triggerPrice && triggerPrice !== '') {
+                orderParams.triggerprice = triggerPrice.toString();
             }
 
-            if (orderDetails.disclosedquantity && orderDetails.disclosedquantity !== '') {
-                orderParams.disclosedquantity = orderDetails.disclosedquantity.toString();
+            const disclosedQty = getVal(orderDetails, ['disclosedquantity', 'disclosedQuantity']);
+            if (disclosedQty && disclosedQty !== '') {
+                orderParams.disclosedquantity = disclosedQty.toString();
             }
 
-            const response = await placeOrder(session.access_token, account.api_key, orderParams);
+            console.log(`[GroupOrder] Sending placement to Angel One for ${account.nickname}:`, JSON.stringify(orderParams));
+            
+            const response = await placeOrder(session.accessToken, account.api_key, orderParams);
+            
+            console.log(`[GroupOrder] Response for ${account.nickname}:`, JSON.stringify(response));
+
             return {
                 success: response.status === true || response.message === 'SUCCESS',
                 orderid: response.data?.orderid || response.orderid,
@@ -59,7 +77,7 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
             };
         }
     } catch (error: any) {
-        console.error(`[GroupOrder] Error for ${account.nickname}:`, error.message || error);
+        console.error(`[GroupOrder] Error for ${account.nickname}:`, JSON.stringify(error.response?.data || error.message || error));
         return { success: false, error: error.message || 'Placement failed' };
     }
 
@@ -266,7 +284,7 @@ export const modifyReplicatedOrders = async (masterOrderId: string, newDetails: 
 
             // 4. Modify order
             const modifyParams = {
-                variety: 'NORMAL',
+                variety: newDetails.variety || childOrder.variety || 'NORMAL',
                 orderid: childOrder.broker_order_id,
                 ordertype: newDetails.ordertype,
                 producttype: newDetails.producttype,
