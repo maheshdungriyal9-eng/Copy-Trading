@@ -113,17 +113,17 @@ export class SmartStream2 extends EventEmitter {
 
     private parseBinary(buffer: Buffer) {
         try {
+            if (buffer.length < 42) return; // Minimum length for any valid tick
+
             const mode = buffer.readInt8(0);
             const exchangeType = buffer.readInt8(1);
 
             // Token is 25 bytes starting at index 2
             let token = buffer.toString('utf8', 2, 27).replace(/\0/g, '').trim();
 
+            if (buffer.length < 43) return; // Need at least sequence + timestamp + ltp
             const sequenceNumber = buffer.readBigInt64LE(27);
             const timestamp = buffer.readBigInt64LE(35);
-
-            // LTP is at index 43, size 8 bytes, but docs say int32. 
-            // Let's read it as BigInt64LE based on the index map provided.
             const ltp = Number(buffer.readBigInt64LE(43));
 
             const tick: any = {
@@ -131,12 +131,12 @@ export class SmartStream2 extends EventEmitter {
                 e: exchangeType,
                 m: mode,
                 ltp: ltp,
-                lp: ltp, // Dual key for frontend compatibility
+                lp: ltp,
                 sn: Number(sequenceNumber),
                 ts: Number(timestamp)
             };
 
-            if (mode >= 2) { // Quote or SnapQuote
+            if (mode >= 2 && buffer.length >= 123) { // Quote or SnapQuote
                 tick.ltq = Number(buffer.readBigInt64LE(51));
                 tick.atp = Number(buffer.readBigInt64LE(59));
                 tick.v = Number(buffer.readBigInt64LE(67));
@@ -148,14 +148,10 @@ export class SmartStream2 extends EventEmitter {
                 tick.c = Number(buffer.readBigInt64LE(115));
             }
 
-            if (mode === 3) { // SnapQuote
+            if (mode === 3 && buffer.length >= 379) { // SnapQuote
                 tick.ltt = Number(buffer.readBigInt64LE(123));
                 tick.oi = Number(buffer.readBigInt64LE(131));
-                // Index 139 is OI Change (double), usually garbage as per docs
-
-                // Best Five Data starts at index 147
-                // (Omitted for now to keep payload light unless needed)
-
+                
                 tick.uc = Number(buffer.readBigInt64LE(347));
                 tick.lc = Number(buffer.readBigInt64LE(355));
                 tick.h52 = Number(buffer.readBigInt64LE(363));
@@ -163,8 +159,8 @@ export class SmartStream2 extends EventEmitter {
             }
 
             this.emit('tick', tick);
-        } catch (e) {
-            console.error('[SmartStream2] Binary parsing failed:', e);
+        } catch (e: any) {
+            console.error('[SmartStream2] Binary parsing failed:', e.message, 'Buffer length:', buffer.length);
         }
     }
 

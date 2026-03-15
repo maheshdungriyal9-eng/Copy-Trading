@@ -7,7 +7,7 @@ class OrderPollingService {
     private isRunning: boolean = false;
     private interval: NodeJS.Timeout | null = null;
     private processedOrders: Set<string> = new Set();
-    private pollIntervalMs: number = 5000; // 5 seconds
+    private pollIntervalMs: number = 60000; // 60 seconds (1 minute)
 
     async start() {
         if (this.isRunning) return;

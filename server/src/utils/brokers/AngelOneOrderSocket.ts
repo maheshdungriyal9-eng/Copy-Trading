@@ -101,17 +101,13 @@ export class AngelOneOrderSocket {
         if (!data || !data.orderData) return;
 
         const order = data.orderData;
-        const statusCode = data['status-code'];
+        const exchange = data.exchange;
         const orderStatus = data['order-status']; // e.g., AB01 (open), AB02 (cancelled), AB04 (modified), AB05 (complete)
 
-        console.log(`[OrderSocket] Update for ${this.account.client_id}: Status=${orderStatus}, ID=${order.orderid}`);
+        console.log(`[OrderSocket] Update for ${this.account.client_id}: Status=${orderStatus}, ID=${order.orderid}, Symbol=${order.tradingsymbol}`);
 
         // We only care about Master orders that weren't placed by our own app to avoid loops.
-        // AB01/AB05/AB06 usually trigger replication (New Order)
-        // AB04 triggers modification
-        // AB02/AB07/AB08 trigger cancellation/updates
-
-        // Check if this order exists in our history already
+        // Process based on status
         this.checkAndProcessOrder(order, orderStatus);
     }
 
@@ -120,7 +116,7 @@ export class AngelOneOrderSocket {
             // 1. Check if we already logged this order as 'app' source
             const { data: existingOrder } = await supabase
                 .from('order_history')
-                .select('id, source')
+                .select('id, source, status')
                 .eq('broker_order_id', order.orderid)
                 .single();
 
@@ -132,19 +128,22 @@ export class AngelOneOrderSocket {
             // 2. Decide action based on orderStatus
             // AB01 = open, AB05 = complete, AB06 = after market order req received
             if (['AB01', 'AB05', 'AB06'].includes(orderStatus) && !existingOrder) {
-                console.log(`[OrderSocket] Manual new order detected for Master ${this.account.client_id}. Replicating...`);
+                console.log(`[OrderSocket] Manual new order detected for Master ${this.account.client_id} (Status: ${orderStatus}). Replicating...`);
+                // Ensure variety is passed (Angel One postback has 'variety')
                 await replicateMasterOrder(this.account.id, order);
             } 
             // AB04 = modified
             else if (orderStatus === 'AB04') {
                 console.log(`[OrderSocket] Manual modification detected for Master ${this.account.client_id}. Updating children...`);
-                // Import from orders.ts (will implement this)
                 const { modifyReplicatedOrders } = require('../orders');
                 await modifyReplicatedOrders(order.orderid, order);
             }
-            // AB02 = cancelled, AB07 = cancelled after market order
-            else if (['AB02', 'AB07'].includes(orderStatus)) {
-                console.log(`[OrderSocket] Manual cancellation detected for Master ${this.account.client_id}. Cancelling children...`);
+            // AB02 = cancelled, AB07 = cancelled after market order, AB08 = rejection? (usually cancel)
+            else if (['AB02', 'AB07', 'AB08'].includes(orderStatus)) {
+                if (existingOrder && existingOrder.status?.toLowerCase() === 'cancelled') {
+                    return; // Already processed
+                }
+                console.log(`[OrderSocket] Manual cancellation detected for Master ${this.account.client_id} (Status: ${orderStatus}). Cancelling children...`);
                 const { cancelReplicatedOrders } = require('../orders');
                 await cancelReplicatedOrders(order.orderid);
             }

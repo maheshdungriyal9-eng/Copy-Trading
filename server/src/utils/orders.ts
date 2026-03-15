@@ -2,18 +2,23 @@ import { supabase } from '../utils/supabase';
 import { loginAngelOne } from './brokers/angelone';
 import { placeOrder, modifyOrder, cancelOrder } from './brokers/angelone_orders';
 
+const mapProductType = (angelProduct: string) => {
+    const mapping: { [key: string]: string } = {
+        'CNC': 'DELIVERY',
+        'MIS': 'INTRADAY',
+        'NRML': 'CARRYFORWARD',
+        'MARGIN': 'MARGIN'
+    };
+    return mapping[angelProduct.toUpperCase()] || angelProduct;
+};
+
 const sendOrderToBroker = async (account: any, orderDetails: any) => {
-    console.log(`[GroupOrder] Executing ${orderDetails.transactionType} for ${orderDetails.symbol} on account ${account.nickname}`);
+    console.log(`[GroupOrder] Executing ${orderDetails.transactionType} for ${orderDetails.tradingsymbol || orderDetails.symbol} on account ${account.nickname}`);
 
     try {
         if (account.broker_name.toLowerCase() === 'angelone') {
-            // 1. Login to get fresh session
-            const session = await loginAngelOne(
-                account.client_id,
-                account.totp_secret,
-                account.api_key,
-                account.password
-            );
+            const { sessionManager } = require('./brokers/SessionManager');
+            const session = await sessionManager.getSession(account);
 
             if (!session.success) {
                 return { success: false, error: 'Authentication failed' };
@@ -24,14 +29,14 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
 
             // 2. Place order
             const orderParams: any = {
-                variety: 'NORMAL',
+                variety: orderDetails.variety || 'NORMAL',
                 tradingsymbol: orderDetails.tradingsymbol,
                 symboltoken: orderDetails.symboltoken,
                 transactiontype: orderDetails.transactionType,
                 exchange: orderDetails.exchange,
                 ordertype: orderDetails.orderType,
-                producttype: orderDetails.productType,
-                duration: 'DAY',
+                producttype: mapProductType(orderDetails.productType),
+                duration: orderDetails.duration || 'DAY',
                 price: orderDetails.price?.toString() || '0',
                 quantity: finalQuantity.toString(),
                 squareoff: "0",
@@ -181,6 +186,8 @@ export const replicateMasterOrder = async (masterAccountId: string, orderDetails
                     exchange: orderDetails.exchange,
                     orderType: orderDetails.ordertype,
                     productType: orderDetails.producttype,
+                    variety: orderDetails.variety || 'NORMAL',
+                    duration: orderDetails.duration || 'DAY',
                     quantity: orderDetails.quantity,
                     price: orderDetails.price || orderDetails.averageprice || '0',
                     triggerprice: orderDetails.triggerprice || '',
