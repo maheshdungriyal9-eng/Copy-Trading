@@ -121,7 +121,7 @@ export class SmartStream2 extends EventEmitter {
             // Token is 25 bytes starting at index 2
             let token = buffer.toString('utf8', 2, 27).replace(/\0/g, '').trim();
 
-            if (buffer.length < 43) return; // Need at least sequence + timestamp + ltp
+            if (buffer.length < 51) return; // Need at least sequence (8) + timestamp (8) + ltp (8)
             const sequenceNumber = buffer.readBigInt64LE(27);
             const timestamp = buffer.readBigInt64LE(35);
             const ltp = Number(buffer.readBigInt64LE(43));

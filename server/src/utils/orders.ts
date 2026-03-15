@@ -305,7 +305,7 @@ export const cancelReplicatedOrders = async (masterOrderId: string) => {
             .from('order_history')
             .select('*, demat_accounts(*)')
             .eq('parent_broker_order_id', masterOrderId)
-            .neq('status', 'cancelled');
+            .not('status', 'ilike', 'cancelled');
 
         if (fetchError || !childOrders || childOrders.length === 0) {
             console.log(`[CopyTrade] No active child orders found to cancel for master order ${masterOrderId}`);
