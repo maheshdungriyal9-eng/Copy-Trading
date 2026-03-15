@@ -120,14 +120,16 @@ export class AngelOneOrderSocket {
                 .eq('broker_order_id', order.orderid)
                 .single();
 
-            // If it's from our app, we ignore it (to avoid loops)
-            if (existingOrder && existingOrder.source === 'app') {
+            // 2. Decide action based on orderStatus
+            const isPlacementStatus = ['AB01', 'AB05', 'AB06'].includes(orderStatus);
+
+            // If it's from our app and it's a placement, we ignore it (to avoid replication loops)
+            if (existingOrder && existingOrder.source === 'app' && isPlacementStatus) {
                 return;
             }
 
-            // 2. Decide action based on orderStatus
             // AB01 = open, AB05 = complete, AB06 = after market order req received
-            if (['AB01', 'AB05', 'AB06'].includes(orderStatus) && !existingOrder) {
+            if (isPlacementStatus && !existingOrder) {
                 console.log(`[OrderSocket] Manual new order detected for Master ${this.account.client_id} (Status: ${orderStatus}). Replicating...`);
                 // Ensure variety is passed (Angel One postback has 'variety')
                 await replicateMasterOrder(this.account.id, order);

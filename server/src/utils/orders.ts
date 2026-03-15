@@ -114,18 +114,45 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
 
         if (accError) throw accError;
 
-        // 2. Execute orders in sequence (to avoid rate limits or session conflicts easily, 
-        // though parallel is better for performance, sequence is safer for now)
-        const results = [];
-        for (const account of accounts) {
-            const mapping = mappings.find(m => m.demat_account_id === account.id);
-            const accountWithContext = { ...account, multiplier: mapping?.multiplier || 1 };
-            const result = await sendOrderToBroker(accountWithContext, orderDetails);
-            results.push({ account, result });
+        // 2. Identify Master and Children
+        const masterMapping = mappings.find(m => m.account_type === 'Master');
+        const childMappings = mappings.filter(m => m.account_type === 'Child');
+
+        if (!masterMapping) {
+            console.log(`[GroupOrder] No Master found for group ${groupId}. Placing as individual accounts.`);
         }
 
-        // 3. Log results to order_history
-        const historyLogs = results.map(({ account, result }) => {
+        const results = [];
+        let masterBrokerOrderId = null;
+
+        // 3. Execute Master order first (if exists)
+        if (masterMapping) {
+            const masterAccount = accounts.find(a => a.id === masterMapping.demat_account_id);
+            if (masterAccount) {
+                const masterWithContext = { ...masterAccount, multiplier: masterMapping.multiplier || 1 };
+                const result = await sendOrderToBroker(masterWithContext, orderDetails);
+                results.push({ account: masterAccount, result, type: 'Master' });
+                if (result.success && result.orderid) {
+                    masterBrokerOrderId = result.orderid;
+                }
+            }
+        }
+
+        // 4. Execute Child orders (linking to Master if possible)
+        for (const mapping of childMappings) {
+            const account = accounts.find(a => a.id === mapping.demat_account_id);
+            if (!account) continue;
+            
+            // Skip if this was also the master (unlikely but safe)
+            if (results.some(r => r.account.id === account.id)) continue;
+
+            const accountWithContext = { ...account, multiplier: mapping.multiplier || 1 };
+            const result = await sendOrderToBroker(accountWithContext, orderDetails);
+            results.push({ account, result, type: 'Child' });
+        }
+
+        // 5. Log results to order_history
+        const historyLogs = results.map(({ account, result, type }) => {
             const mapping = mappings.find(m => m.demat_account_id === account.id);
             const multiplier = Number(mapping?.multiplier) || 1;
 
@@ -133,14 +160,15 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
                 user_id: account.user_id,
                 group_id: groupId,
                 demat_account_id: account.id,
-                symbol: orderDetails.symbol,
+                symbol: orderDetails.tradingsymbol || orderDetails.symbol,
                 exchange: orderDetails.exchange,
-                buy_sell: orderDetails.transactionType,
-                order_type: orderDetails.orderType,
+                buy_sell: orderDetails.transactiontype || orderDetails.transactionType,
+                order_type: orderDetails.ordertype || orderDetails.orderType,
                 price: orderDetails.price || 0,
                 quantity: Math.floor(Number(orderDetails.quantity) * multiplier),
                 status: result.success ? 'Success' : 'Failed',
                 broker_order_id: result.orderid || null,
+                parent_broker_order_id: type === 'Child' ? masterBrokerOrderId : null,
                 source: 'app'
             };
         });
@@ -148,7 +176,7 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
         await supabase.from('order_history').insert(historyLogs);
 
         return {
-            total_accounts: accounts.length,
+            total_accounts: results.length,
             success_count: results.filter(r => r.result.success).length,
             orderIds: results.map(r => r.result.orderid || 'FAILED')
         };
