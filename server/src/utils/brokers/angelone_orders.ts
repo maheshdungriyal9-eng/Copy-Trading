@@ -110,6 +110,18 @@ export const cancelOrder = async (accessToken: string, apiKey: string, orderid: 
     }
 };
 
+export const modifyOrder = async (accessToken: string, apiKey: string, params: any) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rest/secure/angelbroking/order/v1/modifyOrder`, params, {
+            headers: getHeaders(accessToken, apiKey)
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('[AngelOneOrders] Modify Order Error:', error.response?.data || error.message);
+        throw error.response?.data || error;
+    }
+};
+
 export const cancelGTTRule = async (accessToken: string, apiKey: string, id: string, symboltoken: string, exchange: string) => {
     try {
         const response = await axios.post(`${BASE_URL}/rest/secure/angelbroking/gtt/v1/cancelRule`, { id, symboltoken, exchange }, {

@@ -768,6 +768,7 @@ app.post('/api/webhooks/angelone', async (req, res) => {
 });
 
 import { orderPollingService } from './utils/OrderPollingService';
+import { orderSocketManager } from './utils/brokers/AngelOneOrderSocket';
 
 const PORT = process.env.PORT || 5000;
 
@@ -775,8 +776,12 @@ httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     // Sync/Load instruments on startup
     loadInstruments();
-    // Start Order Polling for Copy Trading
+    // Start Order Polling for Copy Trading (Backup)
     orderPollingService.start().catch(err => {
         console.error('Failed to start Order Polling Service:', err);
+    });
+    // Start Real-time Order Socket for Copy Trading (Primary)
+    orderSocketManager.init().catch(err => {
+        console.error('Failed to initialize Order Socket Manager:', err);
     });
 });

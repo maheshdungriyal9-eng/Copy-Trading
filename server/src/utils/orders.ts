@@ -1,6 +1,6 @@
 import { supabase } from '../utils/supabase';
 import { loginAngelOne } from './brokers/angelone';
-import { placeOrder } from './brokers/angelone_orders';
+import { placeOrder, modifyOrder, cancelOrder } from './brokers/angelone_orders';
 
 const sendOrderToBroker = async (account: any, orderDetails: any) => {
     console.log(`[GroupOrder] Executing ${orderDetails.transactionType} for ${orderDetails.symbol} on account ${account.nickname}`);
@@ -208,6 +208,7 @@ export const replicateMasterOrder = async (masterAccountId: string, orderDetails
                     quantity: Math.floor(Number(orderDetails.quantity) * multiplier),
                     status: result.success ? 'Success' : 'Failed',
                     broker_order_id: result.orderid || null,
+                    parent_broker_order_id: orderDetails.orderid, // Link to master
                     source: 'copy_trade'
                 };
             });
@@ -216,5 +217,113 @@ export const replicateMasterOrder = async (masterAccountId: string, orderDetails
         }
     } catch (error: any) {
         console.error('[CopyTrade] Replication failed:', error.message);
+    }
+};
+
+export const modifyReplicatedOrders = async (masterOrderId: string, newDetails: any) => {
+    try {
+        console.log(`[CopyTrade] Modifying child orders for master order: ${masterOrderId}`);
+
+        // 1. Find all child orders in history linked to this master
+        const { data: childOrders, error: fetchError } = await supabase
+            .from('order_history')
+            .select('*, demat_accounts(*)')
+            .eq('parent_broker_order_id', masterOrderId);
+
+        if (fetchError || !childOrders || childOrders.length === 0) {
+            console.log(`[CopyTrade] No child orders found to modify for master order ${masterOrderId}`);
+            return;
+        }
+
+        for (const childOrder of childOrders) {
+            const account = childOrder.demat_accounts;
+            if (!account) continue;
+
+            console.log(`[CopyTrade] Modifying order for child: ${account.nickname}`);
+
+            // 2. Login
+            const { sessionManager } = require('./brokers/SessionManager');
+            const session = await sessionManager.getSession(account);
+            if (!session.success) continue;
+
+            // 3. Calculate new quantity if needed (fetching multiplier from group_accounts)
+            const { data: mapping } = await supabase
+                .from('group_accounts')
+                .select('multiplier')
+                .eq('group_id', childOrder.group_id)
+                .eq('demat_account_id', account.id)
+                .single();
+
+            const multiplier = Number(mapping?.multiplier) || 1;
+            const finalQuantity = Math.floor(Number(newDetails.quantity) * multiplier);
+
+            // 4. Modify order
+            const modifyParams = {
+                variety: 'NORMAL',
+                orderid: childOrder.broker_order_id,
+                ordertype: newDetails.ordertype,
+                producttype: newDetails.producttype,
+                duration: newDetails.duration || 'DAY',
+                price: newDetails.price?.toString() || '0',
+                quantity: finalQuantity.toString(),
+                tradingsymbol: newDetails.tradingsymbol,
+                symboltoken: newDetails.symboltoken,
+                exchange: newDetails.exchange
+            };
+
+            const result = await modifyOrder(session.accessToken, account.api_key, modifyParams);
+            
+            if (result.status) {
+                // Update history
+                await supabase.from('order_history')
+                    .update({
+                        price: parseFloat(newDetails.price) || 0,
+                        quantity: finalQuantity,
+                        status: 'Modified'
+                    })
+                    .eq('id', childOrder.id);
+            }
+        }
+    } catch (error: any) {
+        console.error('[CopyTrade] Modification failed:', error.message);
+    }
+};
+
+export const cancelReplicatedOrders = async (masterOrderId: string) => {
+    try {
+        console.log(`[CopyTrade] Cancelling child orders for master order: ${masterOrderId}`);
+
+        // 1. Find all child orders
+        const { data: childOrders, error: fetchError } = await supabase
+            .from('order_history')
+            .select('*, demat_accounts(*)')
+            .eq('parent_broker_order_id', masterOrderId)
+            .neq('status', 'cancelled');
+
+        if (fetchError || !childOrders || childOrders.length === 0) {
+            console.log(`[CopyTrade] No active child orders found to cancel for master order ${masterOrderId}`);
+            return;
+        }
+
+        for (const childOrder of childOrders) {
+            const account = childOrder.demat_accounts;
+            if (!account) continue;
+
+            // 2. Login
+            const { sessionManager } = require('./brokers/SessionManager');
+            const session = await sessionManager.getSession(account);
+            if (!session.success) continue;
+
+            // 3. Cancel
+            const result = await cancelOrder(session.accessToken, account.api_key, childOrder.broker_order_id);
+            
+            if (result.status) {
+                await supabase.from('order_history')
+                    .update({ status: 'Cancelled' })
+                    .eq('id', childOrder.id);
+            }
+        }
+    } catch (error: any) {
+        console.error('[CopyTrade] Cancellation failed:', error.message);
     }
 };
