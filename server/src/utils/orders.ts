@@ -7,9 +7,19 @@ const mapProductType = (angelProduct: string) => {
         'CNC': 'DELIVERY',
         'MIS': 'INTRADAY',
         'NRML': 'CARRYFORWARD',
-        'MARGIN': 'MARGIN'
+        'MARGIN': 'MARGIN',
+        'CARRYFORWARD': 'CARRYFORWARD',
+        'DELIVERY': 'DELIVERY',
+        'INTRADAY': 'INTRADAY'
     };
     return mapping[angelProduct.toUpperCase()] || angelProduct;
+};
+
+const mapVariety = (variety: string) => {
+    const v = variety.toUpperCase();
+    if (v === 'AMO') return 'NORMAL';
+    if (['NORMAL', 'STOPLOSS', 'ROBO'].includes(v)) return v;
+    return 'NORMAL';
 };
 
 const sendOrderToBroker = async (account: any, orderDetails: any) => {
@@ -40,7 +50,7 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
 
             // 2. Place order
             const orderParams: any = {
-                variety: getVal(orderDetails, ['variety']) || 'NORMAL',
+                variety: mapVariety(getVal(orderDetails, ['variety']) || 'NORMAL'),
                 tradingsymbol: getVal(orderDetails, ['tradingsymbol', 'tradingSymbol']),
                 symboltoken: getVal(orderDetails, ['symboltoken', 'symbolToken']),
                 transactiontype: getVal(orderDetails, ['transactiontype', 'transactionType']),
@@ -51,7 +61,8 @@ const sendOrderToBroker = async (account: any, orderDetails: any) => {
                 price: getVal(orderDetails, ['price', 'averageprice'])?.toString() || '0',
                 quantity: finalQuantity.toString(),
                 squareoff: "0",
-                stoploss: "0"
+                stoploss: "0",
+                scripconsent: "yes"
             };
 
             const triggerPrice = getVal(orderDetails, ['triggerprice', 'triggerPrice']);

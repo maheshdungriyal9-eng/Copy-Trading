@@ -112,19 +112,35 @@ export class SmartStream2 extends EventEmitter {
     }
 
     private parseBinary(buffer: Buffer) {
-        try {
-            if (buffer.length < 42) return; // Minimum length for any valid tick
+        const safeReadBigInt64LE = (offset: number) => {
+            if (offset + 8 <= buffer.length) return buffer.readBigInt64LE(offset);
+            return BigInt(0);
+        };
 
-            const mode = buffer.readInt8(0);
-            const exchangeType = buffer.readInt8(1);
+        const safeReadDoubleLE = (offset: number) => {
+            if (offset + 8 <= buffer.length) return buffer.readDoubleLE(offset);
+            return 0;
+        };
+
+        const safeReadInt8 = (offset: number) => {
+            if (offset + 1 <= buffer.length) return buffer.readInt8(offset);
+            return 0;
+        };
+
+        try {
+            if (buffer.length < 2) return;
+
+            const mode = safeReadInt8(0);
+            const exchangeType = safeReadInt8(1);
 
             // Token is 25 bytes starting at index 2
+            if (buffer.length < 27) return;
             let token = buffer.toString('utf8', 2, 27).replace(/\0/g, '').trim();
 
             if (buffer.length < 51) return; // Need at least sequence (8) + timestamp (8) + ltp (8)
-            const sequenceNumber = buffer.readBigInt64LE(27);
-            const timestamp = buffer.readBigInt64LE(35);
-            const ltp = Number(buffer.readBigInt64LE(43));
+            const sequenceNumber = safeReadBigInt64LE(27);
+            const timestamp = safeReadBigInt64LE(35);
+            const ltp = Number(safeReadBigInt64LE(43));
 
             const tick: any = {
                 tk: token,
@@ -138,32 +154,32 @@ export class SmartStream2 extends EventEmitter {
 
             // Size checks based on Angel One proto specifications
             if (mode >= 2 && buffer.length >= 123) { // Quote
-                tick.ltq = Number(buffer.readBigInt64LE(51));
-                tick.atp = Number(buffer.readBigInt64LE(59));
-                tick.v = Number(buffer.readBigInt64LE(67));
-                tick.tbq = buffer.readDoubleLE(75);
-                tick.tsq = buffer.readDoubleLE(83);
-                tick.o = Number(buffer.readBigInt64LE(91));
-                tick.h = Number(buffer.readBigInt64LE(99));
-                tick.l = Number(buffer.readBigInt64LE(107));
-                tick.c = Number(buffer.readBigInt64LE(115));
+                tick.ltq = Number(safeReadBigInt64LE(51));
+                tick.atp = Number(safeReadBigInt64LE(59));
+                tick.v = Number(safeReadBigInt64LE(67));
+                tick.tbq = safeReadDoubleLE(75);
+                tick.tsq = safeReadDoubleLE(83);
+                tick.o = Number(safeReadBigInt64LE(91));
+                tick.h = Number(safeReadBigInt64LE(99));
+                tick.l = Number(safeReadBigInt64LE(107));
+                tick.c = Number(safeReadBigInt64LE(115));
             }
 
             if (mode === 3 && buffer.length >= 379) { // SnapQuote
-                tick.ltt = Number(buffer.readBigInt64LE(123));
-                tick.oi = Number(buffer.readBigInt64LE(131));
+                tick.ltt = Number(safeReadBigInt64LE(123));
+                tick.oi = Number(safeReadBigInt64LE(131));
                 
-                tick.uc = Number(buffer.readBigInt64LE(347));
-                tick.lc = Number(buffer.readBigInt64LE(355));
-                tick.h52 = Number(buffer.readBigInt64LE(363));
-                tick.l52 = Number(buffer.readBigInt64LE(371));
+                tick.uc = Number(safeReadBigInt64LE(347));
+                tick.lc = Number(safeReadBigInt64LE(355));
+                tick.h52 = Number(safeReadBigInt64LE(363));
+                tick.l52 = Number(safeReadBigInt64LE(371));
             }
 
             this.emit('tick', tick);
         } catch (e: any) {
-            // Log only if it's not a common out-of-bounds due to packet fragmentation
+            // Silently ignore out of bounds during fragmentation, log others
             if (!e.message.includes('out of range') && !e.message.includes('outside buffer bounds')) {
-                console.error('[SmartStream2] Binary parsing error:', e.message, 'Buffer length:', buffer.length);
+                console.error('[SmartStream2] Binary parsing error:', e.message);
             }
         }
     }
