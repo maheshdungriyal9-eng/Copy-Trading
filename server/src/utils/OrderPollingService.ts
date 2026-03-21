@@ -3,10 +3,16 @@ import { sessionManager } from './brokers/SessionManager';
 import { getOrderBook } from './brokers/angelone_orders';
 import { replicateMasterOrder } from './orders';
 
+interface TrackedOrder {
+    status: string;
+    quantity: string;
+    price: string;
+}
+
 class OrderPollingService {
     private isRunning: boolean = false;
     private timeout: NodeJS.Timeout | null = null;
-    private processedOrders: Set<string> = new Set();
+    private processedOrders: Map<string, TrackedOrder> = new Map();
     private pollIntervalMs: number = 60000; // 60 seconds (1 minute)
 
     async start() {
@@ -35,14 +41,21 @@ class OrderPollingService {
 
             const { data, error } = await supabase
                 .from('order_history')
-                .select('broker_order_id')
-                .gte('executed_at', today.toISOString());
+                .select('broker_order_id, status, quantity, price')
+                .gte('executed_at', today.toISOString())
+                .is('parent_broker_order_id', null); // Focus on master orders
 
             if (data) {
                 data.forEach(order => {
-                    if (order.broker_order_id) this.processedOrders.add(order.broker_order_id);
+                    if (order.broker_order_id) {
+                        this.processedOrders.set(order.broker_order_id, {
+                            status: order.status || '',
+                            quantity: order.quantity?.toString() || '0',
+                            price: order.price?.toString() || '0'
+                        });
+                    }
                 });
-                console.log(`[OrderPollingService] Loaded ${this.processedOrders.size} existing orders into cache.`);
+                console.log(`[OrderPollingService] Loaded ${this.processedOrders.size} master orders into cache.`);
             }
         } catch (error) {
             console.error('[OrderPollingService] Failed to load initial history:', error);
@@ -93,33 +106,68 @@ class OrderPollingService {
 
                     // 4. Process Orders
                     for (const order of orderBook.data) {
-                        if (this.processedOrders.has(order.orderid)) continue;
+                        const lastState = this.processedOrders.get(order.orderid);
 
-                        console.log(`[OrderPollingService] New external order detected: ${order.orderid} for ${account.client_id}`);
-                        this.processedOrders.add(order.orderid);
+                        if (!lastState) {
+                            // New order detected
+                            console.log(`[OrderPollingService] New external order detected: ${order.orderid} for ${account.client_id}`);
+                            
+                            this.processedOrders.set(order.orderid, {
+                                status: order.status,
+                                quantity: order.quantity,
+                                price: order.price
+                            });
 
-                        const { data: existing } = await supabase
-                            .from('order_history')
-                            .select('id')
-                            .eq('broker_order_id', order.orderid)
-                            .single();
+                            const { data: existing } = await supabase
+                                .from('order_history')
+                                .select('id')
+                                .eq('broker_order_id', order.orderid)
+                                .single();
 
-                        if (!existing) {
-                            try {
-                                await replicateMasterOrder(accountId, {
-                                    ...order,
-                                    tradingsymbol: order.tradingsymbol,
-                                    symboltoken: order.symboltoken,
-                                    transactiontype: order.transactiontype,
-                                    exchange: order.exchange,
-                                    ordertype: order.ordertype,
-                                    producttype: order.producttype,
+                            if (!existing) {
+                                try {
+                                    await replicateMasterOrder(accountId, {
+                                        ...order,
+                                        tradingsymbol: order.tradingsymbol,
+                                        symboltoken: order.symboltoken,
+                                        transactiontype: order.transactiontype,
+                                        exchange: order.exchange,
+                                        ordertype: order.ordertype,
+                                        producttype: order.producttype,
+                                        quantity: order.quantity,
+                                        price: order.price,
+                                        status: order.status
+                                    });
+                                } catch (err: any) {
+                                    console.error(`[OrderPollingService] Replication failed for ${order.orderid}:`, err.message);
+                                }
+                            }
+                        } else {
+                            // Check for changes (Modification or Cancellation)
+                            const status = order.status.toLowerCase();
+                            const lastStatus = lastState.status.toLowerCase();
+                            
+                            const statusChanged = status !== lastStatus;
+                            const qtyChanged = order.quantity.toString() !== lastState.quantity;
+                            const priceChanged = order.price.toString() !== lastState.price;
+
+                            if (statusChanged || qtyChanged || priceChanged) {
+                                console.log(`[OrderPollingService] Change detected for Master order ${order.orderid}. Syncing to children...`);
+
+                                if (status.includes('cancelled')) {
+                                    const { cancelReplicatedOrders } = require('./orders');
+                                    await cancelReplicatedOrders(order.orderid);
+                                } else if (qtyChanged || priceChanged || status.includes('modified')) {
+                                    const { modifyReplicatedOrders } = require('./orders');
+                                    await modifyReplicatedOrders(order.orderid, order);
+                                }
+
+                                // Update tracked state
+                                this.processedOrders.set(order.orderid, {
+                                    status: order.status,
                                     quantity: order.quantity,
-                                    price: order.price,
-                                    status: order.status
+                                    price: order.price
                                 });
-                            } catch (err: any) {
-                                console.error(`[OrderPollingService] Replication failed for ${order.orderid}:`, err.message);
                             }
                         }
                     }

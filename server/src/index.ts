@@ -17,7 +17,7 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-import { executeGroupOrder, replicateMasterOrder } from './utils/orders';
+import { executeGroupOrder, replicateMasterOrder, modifyReplicatedOrders, cancelReplicatedOrders } from './utils/orders';
 import { AngelOneMarketData } from './utils/AngelOneMarketData';
 import { syncInstruments, loadInstruments, searchInstruments, searchScripAPI } from './utils/instruments';
 import { placeOrder, createGTTRule, getOrderBook, getGTTRuleList, cancelOrder, cancelGTTRule, getTradeBook, getOrderDetails, getLtpData, getRMS, getPositions, getHoldings, getAllHoldings, convertPosition } from './utils/brokers/angelone_orders';
@@ -714,31 +714,48 @@ app.post('/api/webhooks/angelone', async (req, res) => {
         console.log(`[Webhook] Received order update for ${clientCode}: Status=${orderUpdate.status}, ID=${orderUpdate.orderid}`);
 
         // 1. Core Logic: Check for Copy Trading (External order from Master)
-        // We only replicate if:
-        // - It's a "NEW" or "OPEN" status (initial placement)
-        // - It's NOT from our own app (to avoid loops)
-        // - The client is a Master in any group
-        if (orderUpdate.status === 'ordered' || orderUpdate.status === 'open' || orderUpdate.orderstatus === 'SUBMITTED') {
-            // Check if this order was placed by our app
+        const status = orderUpdate.status?.toLowerCase() || '';
+        const orderStatus = orderUpdate.orderstatus?.toLowerCase() || '';
+        
+        const isPlacement = status === 'ordered' || status === 'open' || orderStatus === 'submitted';
+        const isModification = status.includes('modified');
+        const isCancellation = status.includes('cancelled') || orderStatus === 'cancelled';
+
+        if (isPlacement || isModification || isCancellation) {
+            // Check if this order was already processed or placed by our app
             const { data: existingOrder } = await supabase
                 .from('order_history')
-                .select('id, source')
+                .select('id, source, status')
                 .eq('broker_order_id', orderUpdate.orderid)
                 .single();
 
-            if (!existingOrder || existingOrder.source !== 'app') {
-                // Potential Master order from external source (e.g., Angel One App)
-                const { data: masterAccount } = await supabase
-                    .from('demat_accounts')
-                    .select('id')
-                    .eq('client_id', clientCode)
-                    .single();
+            const isManualOrder = !existingOrder || existingOrder.source !== 'app';
 
-                if (masterAccount) {
-                    // Trigger replication logic (async)
+            // Find the Master account
+            const { data: masterAccount } = await supabase
+                .from('demat_accounts')
+                .select('id')
+                .eq('client_id', clientCode)
+                .single();
+
+            if (masterAccount) {
+                if (isPlacement && isManualOrder) {
+                    console.log(`[Webhook] Manual new order detected for Master ${clientCode}. Replicating...`);
                     replicateMasterOrder(masterAccount.id, orderUpdate).catch(err => {
-                        console.error(`[Webhook] Copy trading replication failed for ${clientCode}:`, err.message);
+                        console.error(`[Webhook] Replication failed for ${clientCode}:`, err.message);
                     });
+                } else if (isModification) {
+                    console.log(`[Webhook] Order modification detected for Master ${clientCode}. Updating children...`);
+                    modifyReplicatedOrders(orderUpdate.orderid, orderUpdate).catch(err => {
+                        console.error(`[Webhook] Modification sync failed for ${clientCode}:`, err.message);
+                    });
+                } else if (isCancellation) {
+                    if (existingOrder?.status?.toLowerCase() !== 'cancelled') {
+                        console.log(`[Webhook] Order cancellation detected for Master ${clientCode}. Cancelling children...`);
+                        cancelReplicatedOrders(orderUpdate.orderid).catch(err => {
+                            console.error(`[Webhook] Cancellation sync failed for ${clientCode}:`, err.message);
+                        });
+                    }
                 }
             }
         }

@@ -320,6 +320,14 @@ export const modifyReplicatedOrders = async (masterOrderId: string, newDetails: 
 
             const multiplier = Number(mapping?.multiplier) || 1;
             const finalQuantity = Math.floor(Number(newDetails.quantity) * multiplier);
+            const finalPrice = parseFloat(newDetails.price) || 0;
+
+            // Skip if already in this state to avoid redundant API calls from multiple layers (Socket/Webhook/Polling)
+            if (childOrder.price === finalPrice && 
+                childOrder.quantity === finalQuantity && 
+                (childOrder.status === 'Modified' || childOrder.status === 'Success')) {
+                continue;
+            }
 
             // 4. Modify order
             const modifyParams = {
