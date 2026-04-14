@@ -122,7 +122,7 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
             console.log(`[GroupOrder] No Master found for group ${groupId}. Placing as individual accounts.`);
         }
 
-        const results = [];
+        const results: any[] = [];
         let masterBrokerOrderId = null;
 
         // 3. Execute Master order first (if exists)
@@ -138,18 +138,21 @@ export const executeGroupOrder = async (groupId: string, orderDetails: any, user
             }
         }
 
-        // 4. Execute Child orders (linking to Master if possible)
-        for (const mapping of childMappings) {
+        // 4. Parallelize Child order execution
+        const startTime = Date.now();
+        const childOrderPromises = childMappings.map(async (mapping) => {
             const account = accounts.find(a => a.id === mapping.demat_account_id);
-            if (!account) continue;
-            
-            // Skip if this was also the master (unlikely but safe)
-            if (results.some(r => r.account.id === account.id)) continue;
+            if (!account || results.some(r => r.account.id === account.id)) return null;
 
             const accountWithContext = { ...account, multiplier: mapping.multiplier || 1 };
             const result = await sendOrderToBroker(accountWithContext, orderDetails);
-            results.push({ account, result, type: 'Child' });
-        }
+            return { account, result, type: 'Child' };
+        });
+
+        const childResults = await Promise.all(childOrderPromises);
+        results.push(...childResults.filter((r): r is any => r !== null));
+        
+        console.log(`[GroupOrder] Parallel execution for ${childMappings.length} accounts completed in ${Date.now() - startTime}ms`);
 
         // 5. Log results to order_history
         const historyLogs = results.map(({ account, result, type }) => {
@@ -229,9 +232,9 @@ export const replicateMasterOrder = async (masterAccountId: string, orderDetails
 
             if (accError) throw accError;
 
-            // 3. Execute orders for each child account
-            const results = [];
-            for (const account of accounts) {
+            // 3. Parallelize order replication for all child accounts
+            const startTime = Date.now();
+            const replicationPromises = accounts.map(async (account) => {
                 const mapping = groupMembers.find(m => m.demat_account_id === account.id);
                 const accountWithContext = { ...account, multiplier: mapping?.multiplier || 1 };
 
@@ -252,8 +255,11 @@ export const replicateMasterOrder = async (masterAccountId: string, orderDetails
                 };
 
                 const result = await sendOrderToBroker(accountWithContext, childOrderDetails);
-                results.push({ account, result });
-            }
+                return { account, result };
+            });
+
+            const results = await Promise.all(replicationPromises);
+            console.log(`[CopyTrade] Sequential detection-to-parallel-execution for ${accounts.length} accounts completed in ${Date.now() - startTime}ms`);
 
             // 4. Log results
             const historyLogs = results.map(({ account, result }) => {
@@ -299,37 +305,37 @@ export const modifyReplicatedOrders = async (masterOrderId: string, newDetails: 
             return;
         }
 
-        for (const childOrder of childOrders) {
+        // 2. Optimized: Pre-fetch all group mappings to avoid DB lookups inside the loop
+        const groupIds = [...new Set(childOrders.map(o => o.group_id))];
+        const { data: allMappings } = await supabase
+            .from('group_accounts')
+            .select('group_id, demat_account_id, multiplier')
+            .in('group_id', groupIds);
+
+        const startTime = Date.now();
+        const modificationPromises = childOrders.map(async (childOrder) => {
             const account = childOrder.demat_accounts;
-            if (!account) continue;
+            if (!account) return;
 
-            console.log(`[CopyTrade] Modifying order for child: ${account.nickname}`);
-
-            // 2. Login
+            // 3. Login Check (SessionManager handles caching)
             const { sessionManager } = require('./brokers/SessionManager');
             const session = await sessionManager.getSession(account);
-            if (!session.success) continue;
+            if (!session.success) return;
 
-            // 3. Calculate new quantity if needed (fetching multiplier from group_accounts)
-            const { data: mapping } = await supabase
-                .from('group_accounts')
-                .select('multiplier')
-                .eq('group_id', childOrder.group_id)
-                .eq('demat_account_id', account.id)
-                .single();
-
+            // 4. Calculate new quantity from pre-fetched mappings
+            const mapping = allMappings?.find(m => m.group_id === childOrder.group_id && m.demat_account_id === account.id);
             const multiplier = Number(mapping?.multiplier) || 1;
             const finalQuantity = Math.floor(Number(newDetails.quantity) * multiplier);
             const finalPrice = parseFloat(newDetails.price) || 0;
 
-            // Skip if already in this state to avoid redundant API calls from multiple layers (Socket/Webhook/Polling)
+            // Skip if already in this state
             if (childOrder.price === finalPrice && 
                 childOrder.quantity === finalQuantity && 
                 (childOrder.status === 'Modified' || childOrder.status === 'Success')) {
-                continue;
+                return;
             }
 
-            // 4. Modify order
+            // 5. Modify order
             const modifyParams = {
                 variety: newDetails.variety || childOrder.variety || 'NORMAL',
                 orderid: childOrder.broker_order_id,
@@ -346,16 +352,20 @@ export const modifyReplicatedOrders = async (masterOrderId: string, newDetails: 
             const result = await modifyOrder(session.accessToken, account.api_key, modifyParams);
             
             if (result.status) {
-                // Update history
-                await supabase.from('order_history')
+                // Update history (fire-and-forget logging to not block execution)
+                supabase.from('order_history')
                     .update({
                         price: parseFloat(newDetails.price) || 0,
                         quantity: finalQuantity,
                         status: 'Modified'
                     })
-                    .eq('id', childOrder.id);
+                    .eq('id', childOrder.id)
+                    .then();
             }
-        }
+        });
+
+        await Promise.all(modificationPromises);
+        console.log(`[CopyTrade] Parallel modification for ${childOrders.length} accounts completed in ${Date.now() - startTime}ms`);
     } catch (error: any) {
         console.error('[CopyTrade] Modification failed:', error.message);
     }
@@ -377,24 +387,29 @@ export const cancelReplicatedOrders = async (masterOrderId: string) => {
             return;
         }
 
-        for (const childOrder of childOrders) {
+        const startTime = Date.now();
+        const cancellationPromises = childOrders.map(async (childOrder) => {
             const account = childOrder.demat_accounts;
-            if (!account) continue;
+            if (!account) return;
 
-            // 2. Login
+            // 2. Login Check
             const { sessionManager } = require('./brokers/SessionManager');
             const session = await sessionManager.getSession(account);
-            if (!session.success) continue;
+            if (!session.success) return;
 
             // 3. Cancel
             const result = await cancelOrder(session.accessToken, account.api_key, childOrder.broker_order_id);
             
             if (result.status) {
-                await supabase.from('order_history')
+                supabase.from('order_history')
                     .update({ status: 'Cancelled' })
-                    .eq('id', childOrder.id);
+                    .eq('id', childOrder.id)
+                    .then();
             }
-        }
+        });
+
+        await Promise.all(cancellationPromises);
+        console.log(`[CopyTrade] Parallel cancellation for ${childOrders.length} accounts completed in ${Date.now() - startTime}ms`);
     } catch (error: any) {
         console.error('[CopyTrade] Cancellation failed:', error.message);
     }
