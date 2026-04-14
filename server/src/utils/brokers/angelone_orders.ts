@@ -39,8 +39,8 @@ const getHeaders = (accessToken: string, apiKey: string) => ({
     'Accept': 'application/json',
     'X-UserType': 'USER',
     'X-SourceID': 'WEB',
-    'X-ClientLocalIP': '127.0.0.1',
-    'X-ClientPublicIP': '127.0.0.1',
+    'X-ClientLocalIP': process.env.CLIENT_PUBLIC_IP || '127.0.0.1',
+    'X-ClientPublicIP': process.env.CLIENT_PUBLIC_IP || '127.0.0.1',
     'X-MACAddress': '00-00-00-00-00-00',
     'X-PrivateKey': apiKey
 });
